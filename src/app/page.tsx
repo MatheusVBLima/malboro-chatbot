@@ -37,6 +37,7 @@ import {
   CopyIcon,
   CheckIcon,
   InfoIcon,
+  ImageIcon,
 } from "lucide-react";
 import {
   Tooltip,
@@ -114,6 +115,7 @@ const ChatBotDemo = () => {
   const [input, setInput] = useState("");
   const [model, setModel] = useState<string>(models[0].value);
   const [webSearch, setWebSearch] = useState(false);
+  const [imageGeneration, setImageGeneration] = useState(false);
   const [copiedMessageIds, setCopiedMessageIds] = useState<Set<string>>(
     new Set()
   );
@@ -136,6 +138,7 @@ const ChatBotDemo = () => {
         body: {
           model: model,
           webSearch: webSearch,
+          imageGeneration: imageGeneration,
         },
       }
     );
@@ -205,11 +208,41 @@ const ChatBotDemo = () => {
                 {message.parts.map((part, i) => {
                   switch (part.type) {
                     case "text":
+                      // Processar texto para extrair dados de imagem
+                      let displayText = part.text;
+                      let imageData = null;
+
+                      // Verificar se há marcador de imagem no texto
+                      const imageMatch = part.text.match(/\[IMAGE_DATA:(.+?)\]/);
+                      if (imageMatch) {
+                        try {
+                          imageData = JSON.parse(imageMatch[1]);
+                          // Remover o marcador do texto exibido
+                          displayText = part.text.replace(/\[IMAGE_DATA:.+?\]/, '').trim();
+                        } catch (e) {
+                          console.error('Erro ao processar dados da imagem:', e);
+                        }
+                      }
+
                       return (
                         <Fragment key={`${message.id}-${i}`}>
                           <Message from={message.role}>
                             <MessageContent>
-                              <Response>{part.text}</Response>
+                              <Response>{displayText}</Response>
+                              {/* Renderizar imagem se extraída do texto */}
+                              {imageData && (
+                                <div className="mt-4">
+                                  <img
+                                    src={imageData.dataUrl}
+                                    alt="Imagem gerada"
+                                    className="max-w-full h-auto rounded-lg border"
+                                    style={{ maxHeight: '400px' }}
+                                  />
+                                  <p className="text-xs text-muted-foreground mt-2">
+                                    Gerada com Imagen 3.0
+                                  </p>
+                                </div>
+                              )}
                             </MessageContent>
                           </Message>
                           {message.role === "assistant" &&
@@ -323,6 +356,13 @@ const ChatBotDemo = () => {
               >
                 <GlobeIcon size={16} />
                 <span>Pesquisa</span>
+              </PromptInputButton>
+              <PromptInputButton
+                variant={imageGeneration ? "default" : "ghost"}
+                onClick={() => setImageGeneration(!imageGeneration)}
+              >
+                <ImageIcon size={16} />
+                <span>Imagem</span>
               </PromptInputButton>
               <div className="flex items-center gap-2">
                 <PromptInputModelSelect

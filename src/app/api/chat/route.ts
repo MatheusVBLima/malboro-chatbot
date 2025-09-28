@@ -115,16 +115,74 @@ export async function POST(req: Request) {
     messages,
     model,
     webSearch,
+    imageGeneration,
   }: {
     messages: UIMessage[];
     model: string;
     webSearch: boolean;
+    imageGeneration: boolean;
   } = await req.json();
 
-  // Processar mensagens para detectar solicitações de pesquisa web
+  // Processar mensagens para detectar solicitações
   const lastMessage = messages[messages.length - 1];
   const lastMessageText =
     lastMessage?.parts?.find((part) => part.type === "text")?.text || "";
+
+
+  // Se o botão de geração de imagem está ativo
+  if (imageGeneration && lastMessageText) {
+    try {
+      const response = await fetch(`${req.url.replace('/chat', '/generate-image')}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: lastMessageText }),
+      });
+
+      if (response.ok) {
+        const imageResult = await response.json();
+
+        // Retornar resposta simples sem usar Gemini
+        const textContent = `Aqui está a imagem que você solicitou baseada no prompt: "${lastMessageText}"\n\n[IMAGE_DATA:${JSON.stringify(imageResult.image)}]`;
+
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(textContent));
+            controller.close();
+          }
+        });
+
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+          },
+        });
+      } else {
+        const errorResult = await response.json();
+
+        // Retornar erro simples sem usar Gemini
+        const errorText = `Erro ao gerar imagem: ${errorResult.error || 'Erro desconhecido'}`;
+
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(errorText));
+            controller.close();
+          }
+        });
+
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Erro na geração de imagem:', error);
+      return Response.json({
+        role: 'assistant',
+        content: 'Erro interno ao gerar imagem. Tente novamente.',
+      });
+    }
+  }
 
   // Se o botão Search está ativo, sempre fazer pesquisa web
   const shouldSearchWeb = webSearch && lastMessageText;
