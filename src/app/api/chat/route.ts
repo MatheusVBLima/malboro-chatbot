@@ -150,30 +150,17 @@ export async function POST(req: Request) {
           message.parts.map(async (part) => {
             if (part.type === "file") {
               try {
-                // Tentar primeiro com uploadedUrl, depois com URL
-                const uploadedUrl = (part as any).uploadedUrl;
-                const fileId = uploadedUrl
-                  ? uploadedUrl.split("/").pop()
-                  : part.url?.split("/").pop();
+                // Extrair ID do arquivo da URL do servidor
+                const fileId = part.url?.split("/").pop();
                 const cachedFile = getFile(fileId!);
 
                 if (fileId && cachedFile) {
-                  if (cachedFile.type.startsWith("image/")) {
-                    // Converter imagens para data URL
-                    const base64Data = cachedFile.data.toString("base64");
-                    return {
-                      ...part,
-                      url: `data:${cachedFile.type};base64,${base64Data}`,
-                    };
-                  } else if (cachedFile.type === "application/pdf") {
-                    // Enviar PDF como Base64 para todos os modelos que suportam
-                    // O Gemini 2.5 Pro e Flash têm suporte nativo a PDF
-                    const base64Data = cachedFile.data.toString("base64");
-                    return {
-                      ...part,
-                      url: `data:${cachedFile.type};base64,${base64Data}`,
-                    };
-                  }
+                  // Converter TODOS os arquivos para data URL com Base64
+                  const base64Data = cachedFile.data.toString("base64");
+                  return {
+                    ...part,
+                    url: `data:${cachedFile.type};base64,${base64Data}`,
+                  };
                 }
               } catch (error) {
                 console.error("Erro ao processar arquivo:", error);

@@ -17,6 +17,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { ChatStatus, FileUIPart } from "ai";
+
+// Tipo estendido para incluir estado de upload
+type FileUIPartWithUpload = FileUIPart & {
+  id: string;
+  uploading?: boolean;
+  uploadError?: boolean;
+};
 import {
   ImageIcon,
   Loader2Icon,
@@ -49,7 +56,7 @@ import {
 } from "react";
 
 type AttachmentsContext = {
-  files: (FileUIPart & { id: string })[];
+  files: FileUIPartWithUpload[];
   add: (files: File[] | FileList) => void;
   remove: (id: string) => void;
   clear: () => void;
@@ -72,7 +79,7 @@ export const usePromptInputAttachments = () => {
 };
 
 export type PromptInputAttachmentProps = HTMLAttributes<HTMLDivElement> & {
-  data: FileUIPart & { id: string };
+  data: FileUIPartWithUpload;
   className?: string;
 };
 
@@ -120,7 +127,7 @@ export type PromptInputAttachmentsProps = Omit<
   HTMLAttributes<HTMLDivElement>,
   "children"
 > & {
-  children: (attachment: FileUIPart & { id: string }) => React.ReactNode;
+  children: (attachment: FileUIPartWithUpload) => React.ReactNode;
 };
 
 export function PromptInputAttachments({
@@ -229,7 +236,7 @@ export const PromptInput = ({
   onSubmit,
   ...props
 }: PromptInputProps) => {
-  const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
+  const [items, setItems] = useState<FileUIPartWithUpload[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -294,17 +301,19 @@ export const PromptInput = ({
             message: "Too many files. Some were not added.",
           });
         }
-        const next: (FileUIPart & { id: string })[] = [];
+        const next: FileUIPartWithUpload[] = [];
 
         // Criar itens temporários com blob URLs para feedback imediato
         for (const file of capped) {
           const tempId = nanoid();
+          const blobUrl = URL.createObjectURL(file);
           next.push({
             id: tempId,
             type: "file",
-            url: URL.createObjectURL(file),
+            url: blobUrl,
             mediaType: file.type,
             filename: file.name,
+            uploading: true, // Flag para indicar que está fazendo upload
           });
 
           // Upload em background e atualizar URL
@@ -318,16 +327,32 @@ export const PromptInput = ({
             .then((response) => response.json())
             .then((result) => {
               setItems((currentItems) =>
-                currentItems.map((item) =>
-                  item.id === tempId
-                    ? { ...item, id: result.id, uploadedUrl: result.url }
-                    : item
-                )
+                currentItems.map((item) => {
+                  if (item.id === tempId) {
+                    // Revogar a blob URL antiga
+                    URL.revokeObjectURL(blobUrl);
+                    // Atualizar com a URL do servidor
+                    return {
+                      ...item,
+                      id: result.id,
+                      url: result.url, // Usar a URL do servidor
+                      uploading: false,
+                    };
+                  }
+                  return item;
+                })
               );
             })
             .catch((error) => {
               console.error("Upload failed:", error);
-              // Manter blob URL se upload falhar
+              // Marcar como falha mas manter blob URL
+              setItems((currentItems) =>
+                currentItems.map((item) =>
+                  item.id === tempId
+                    ? { ...item, uploading: false, uploadError: true }
+                    : item
+                )
+              );
             });
         }
 
