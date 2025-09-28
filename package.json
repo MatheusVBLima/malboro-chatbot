@@ -21,6 +21,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@types/pdf-parse": "^1.1.5",
+    "@vercel/blob": "^2.0.0",
     "ai": "^5.0.56",
     "cheerio": "^1.1.2",
     "class-variance-authority": "^0.7.1",

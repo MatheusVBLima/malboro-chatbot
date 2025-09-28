@@ -331,11 +331,20 @@ export const PromptInput = ({
                   if (item.id === tempId) {
                     // Revogar a blob URL antiga
                     URL.revokeObjectURL(blobUrl);
-                    // Atualizar com a URL do servidor
+                    // Atualizar com a URL pública (Blob ou fallback)
+                    const finalUrl = result.url ?? blobUrl;
+                    const uploadedUrl = result.blobUrl ?? result.url ?? blobUrl;
+                    const fallbackUrl =
+                      result.fallbackUrl ?? result.url ?? blobUrl;
                     return {
                       ...item,
                       id: result.id,
-                      url: result.url, // Usar a URL do servidor
+                      url: finalUrl,
+                      uploadedUrl,
+                      storage: result.storage,
+                      blobKey: result.blobKey ?? undefined,
+                      blobUrl: result.blobUrl ?? undefined,
+                      fallbackUrl,
                       uploading: false,
                     };
                   }

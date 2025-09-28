@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { setFile, getFile, cleanupOldFiles } from "@/lib/file-cache";
+import { put } from "@vercel/blob";
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,24 +30,67 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Armazenar no cache (sem processamento - deixar para o AI SDK)
-    setFile(fileId, {
+    // Armazenar no cache em memória (útil para desenvolvimento/local)
+    const cached = {
       name: file.name,
       type: file.type,
       size: file.size,
       data: buffer,
       uploadedAt: Date.now(),
-    });
+      storage: "memory" as "memory" | "blob",
+      blobKey: null as string | null,
+      blobUrl: null as string | null,
+      fallbackUrl: `/api/file/${fileId}`,
+    };
 
-    // Limpar arquivos antigos
-    cleanupOldFiles();
+    setFile(fileId, cached);
+
+    const fallbackUrl = `/api/file/${fileId}`;
+    let publicUrl = fallbackUrl;
+    let storage: "blob" | "memory" = "memory";
+    let blobKey: string | null = null;
+
+    const hasBlobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+
+    if (hasBlobToken) {
+      try {
+        const safeName = file.name?.replace(/[^a-zA-Z0-9_.-]+/g, "_") || "file";
+        blobKey = `uploads/${fileId}-${safeName}`;
+        const blob = await put(blobKey, buffer, {
+          access: "public",
+          contentType: file.type || "application/octet-stream",
+          addRandomSuffix: true, // Previne sobrescrita acidental
+          cacheControlMaxAge: 3600, // 1 hora de cache (mínimo 60s)
+        });
+        publicUrl = blob.url;
+        storage = "blob";
+        cached.storage = "blob";
+        cached.blobKey = blobKey;
+        cached.blobUrl = publicUrl;
+        console.log("✅ Arquivo salvo no Vercel Blob", { fileId, blobKey });
+      } catch (blobError) {
+        console.error(
+          "❌ Falha ao salvar no Vercel Blob. Usando fallback em memória.",
+          blobError
+        );
+      }
+    }
+
+    // Cleanup em background (não bloqueia a resposta)
+    cleanupOldFiles().catch(error =>
+      console.error("Erro no cleanup:", error)
+    );
 
     return NextResponse.json({
       id: fileId,
       name: file.name,
       type: file.type,
       size: file.size,
-      url: `/api/file/${fileId}`,
+      url: publicUrl,
+      storage,
+      blobKey,
+      blobUrl: storage === "blob" ? publicUrl : null,
+      fallbackUrl,
     });
   } catch (error) {
     console.error("Erro no upload:", error);

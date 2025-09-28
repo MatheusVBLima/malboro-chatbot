@@ -6,7 +6,8 @@
       "WebFetch(domain:ai.google.dev)",
       "Bash(npm uninstall:*)",
       "WebSearch",
-      "WebFetch(domain:ai-sdk.dev)"
+      "WebFetch(domain:ai-sdk.dev)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []

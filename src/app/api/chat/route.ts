@@ -1,6 +1,6 @@
 import { streamText, UIMessage, convertToModelMessages } from "ai";
 import { google } from "@ai-sdk/google";
-import { getFile } from "@/lib/file-cache";
+import { getFile, setFile } from "@/lib/file-cache";
 
 // Configure sua API key do Gemini no arquivo .env.local:
 // GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
@@ -150,18 +150,129 @@ export async function POST(req: Request) {
           message.parts.map(async (part) => {
             if (part.type === "file") {
               try {
-                // Extrair ID do arquivo da URL do servidor
-                const fileId = part.url?.split("/").pop();
-                const cachedFile = getFile(fileId!);
+                const filePart = part as any;
+                const candidateUrls: string[] = [];
 
-                if (fileId && cachedFile) {
-                  // Converter TODOS os arquivos para data URL com Base64
+                if (filePart.blobUrl) candidateUrls.push(filePart.blobUrl);
+                if (filePart.uploadedUrl)
+                  candidateUrls.push(filePart.uploadedUrl);
+                if (filePart.url) candidateUrls.push(filePart.url);
+                if (filePart.fallbackUrl)
+                  candidateUrls.push(filePart.fallbackUrl);
+
+                const fileId =
+                  filePart.id ||
+                  filePart.fileId ||
+                  filePart.blobKey?.split("/")[0] ||
+                  (filePart.url ? filePart.url.split("/").pop() : undefined);
+
+                let cachedFile = fileId ? getFile(fileId) : undefined;
+
+                if (!cachedFile) {
+                  for (const candidate of candidateUrls) {
+                    try {
+                      if (!candidate) continue;
+
+                      const targetUrl = candidate.startsWith("http")
+                        ? candidate
+                        : `${
+                            process.env.VERCEL_URL
+                              ? `https://${process.env.VERCEL_URL}`
+                              : "http://localhost:3000"
+                          }${candidate}`;
+
+                      const response = await fetch(targetUrl);
+                      if (!response.ok) continue;
+
+                      const arrayBuffer = await response.arrayBuffer();
+                      const contentType =
+                        response.headers.get("content-type") ||
+                        "application/octet-stream";
+                      const filename =
+                        filePart.filename ||
+                        response.headers
+                          .get("content-disposition")
+                          ?.match(/filename="([^\"]+)"/)?.[1] ||
+                        candidate.split("/").pop() ||
+                        "file";
+
+                      cachedFile = {
+                        name: filename,
+                        type: contentType,
+                        size: arrayBuffer.byteLength,
+                        data: Buffer.from(arrayBuffer),
+                        uploadedAt: Date.now(),
+                        storage: "memory",
+                        blobKey: null,
+                        blobUrl: null,
+                      };
+                      break;
+                    } catch (fetchError) {
+                      console.error(
+                        "❌ Erro ao recuperar arquivo:",
+                        fetchError
+                      );
+                    }
+                  }
+
+                  if (!cachedFile && fileId) {
+                    try {
+                      const { GET } = await import("@/app/api/file/[id]/route");
+                      const { NextRequest } = await import("next/server");
+                      const request = new NextRequest(
+                        `http://localhost/api/file/${fileId}`
+                      );
+                      const params = Promise.resolve({ id: fileId });
+                      const response = await GET(request, { params });
+
+                      if (response.ok) {
+                        const fileBuffer = await response.arrayBuffer();
+                        const contentType =
+                          response.headers.get("content-type") ||
+                          "application/octet-stream";
+                        const contentDisposition =
+                          response.headers.get("content-disposition") || "";
+                        const filename =
+                          contentDisposition.match(
+                            /filename="([^\"]+)"/
+                          )?.[1] || "file";
+
+                        cachedFile = {
+                          name: filename,
+                          type: contentType,
+                          size: fileBuffer.byteLength,
+                          data: Buffer.from(fileBuffer),
+                          uploadedAt: Date.now(),
+                          storage: "memory",
+                          blobKey: null,
+                          blobUrl: null,
+                        };
+                      }
+                    } catch (directError) {
+                      console.error(
+                        "❌ Erro ao buscar arquivo diretamente:",
+                        directError
+                      );
+                    }
+                  }
+
+                  if (fileId && cachedFile) {
+                    setFile(fileId, cachedFile);
+                  }
+                }
+
+                if (cachedFile) {
                   const base64Data = cachedFile.data.toString("base64");
                   return {
                     ...part,
                     url: `data:${cachedFile.type};base64,${base64Data}`,
                   };
                 }
+
+                console.error("❌ Arquivo não encontrado:", {
+                  fileId,
+                  candidateUrls,
+                });
               } catch (error) {
                 console.error("Erro ao processar arquivo:", error);
               }
