@@ -2,9 +2,6 @@ import { streamText, UIMessage, convertToModelMessages } from "ai";
 import { google } from "@ai-sdk/google";
 import { getFile, setFile } from "@/lib/file-cache";
 
-// Configure sua API key do Gemini no arquivo .env.local:
-// GOOGLE_GENERATIVE_AI_API_KEY=your_api_key_here
-
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
@@ -128,59 +125,76 @@ export async function POST(req: Request) {
   const lastMessageText =
     lastMessage?.parts?.find((part) => part.type === "text")?.text || "";
 
-
   // Se o botão de geração de imagem está ativo
   if (imageGeneration && lastMessageText) {
     try {
-      const response = await fetch(`${req.url.replace('/chat', '/generate-image')}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: lastMessageText }),
-      });
+      console.log("🎨 Gerando imagem com Gemini multimodal:", lastMessageText);
 
-      if (response.ok) {
-        const imageResult = await response.json();
+      // Usar o modelo selecionado pelo usuário (se suportar imagens) ou fallback
+      let imageModel = model?.replace("google/", "") || "gemini-2.5-flash";
 
-        // Retornar resposta simples sem usar Gemini
-        const textContent = `Aqui está a imagem que você solicitou baseada no prompt: "${lastMessageText}"\n\n[IMAGE_DATA:${JSON.stringify(imageResult.image)}]`;
+      // Verificar se o modelo suporta geração de imagens
+      const imageCompatibleModels = [
+        "gemini-2.5-flash-image-preview",
+        "gemini-2.5-flash-exp",
+        "gemini-2.0-flash-exp",
+      ];
 
-        const stream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(textContent));
-            controller.close();
-          }
-        });
-
-        return new Response(stream, {
-          headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-          },
-        });
-      } else {
-        const errorResult = await response.json();
-
-        // Retornar erro simples sem usar Gemini
-        const errorText = `Erro ao gerar imagem: ${errorResult.error || 'Erro desconhecido'}`;
-
-        const stream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(errorText));
-            controller.close();
-          }
-        });
-
-        return new Response(stream, {
-          headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-          },
-        });
+      if (!imageCompatibleModels.includes(imageModel)) {
+        console.log(
+          `⚠️ Modelo ${imageModel} não suporta imagens, usando gemini-2.5-flash-image-preview`
+        );
+        imageModel = "gemini-2.5-flash-image-preview";
       }
-    } catch (error) {
-      console.error('Erro na geração de imagem:', error);
-      return Response.json({
-        role: 'assistant',
-        content: 'Erro interno ao gerar imagem. Tente novamente.',
+
+      console.log(`🎨 Usando modelo para imagens: ${imageModel}`);
+
+      const result = await streamText({
+        model: google(imageModel),
+        messages: [
+          {
+            role: "user",
+            content: `Gere uma imagem baseada nesta descrição: ${lastMessageText}`,
+          },
+        ],
+        system:
+          "Você é um assistente que gera imagens. Responda com uma descrição da imagem gerada e inclua a imagem na resposta.",
       });
+
+      console.log("✅ Resposta do Gemini multimodal gerada");
+
+      // Retornar o stream diretamente
+      return result.toUIMessageStreamResponse({
+        sendSources: false,
+        sendReasoning: false,
+      });
+    } catch (error) {
+      console.error("Erro na geração de imagem:", error);
+
+      let errorMessage = "Houve um erro ao gerar a imagem.";
+      if (error instanceof Error) {
+        if (
+          error.message.includes("safety") ||
+          error.message.includes("filter")
+        ) {
+          errorMessage =
+            "A imagem não pôde ser gerada devido a filtros de segurança. Tente um prompt diferente.";
+        } else if (error.message.includes("No image generated")) {
+          errorMessage =
+            "Nenhuma imagem foi gerada. Tente reformular o prompt.";
+        }
+      }
+
+      return streamText({
+        model: google("gemini-2.0-flash-lite"),
+        messages: [
+          {
+            role: "user",
+            content: "Houve um erro ao gerar imagem",
+          },
+        ],
+        system: `Responda exatamente: "${errorMessage}"`,
+      }).toTextStreamResponse();
     }
   }
 

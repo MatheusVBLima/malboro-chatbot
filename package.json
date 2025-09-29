@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^2.0.17",
+    "@ai-sdk/google-vertex": "^3.0.31",
     "@ai-sdk/react": "^2.0.56",
     "@google-cloud/vertexai": "^1.10.0",
     "@radix-ui/react-avatar": "^1.1.10",

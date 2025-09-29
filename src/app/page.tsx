@@ -66,6 +66,7 @@ import {
 } from "@/components/ai-elements/tool";
 import { Badge } from "@/components/ui/badge";
 import { StarsBackground } from "@/components/ui/stars-background";
+import { ImageSkeleton } from "@/components/ui/image-skeleton";
 import { ShootingStars } from "@/components/ui/shooting-stars";
 
 const models = [
@@ -120,6 +121,10 @@ const ChatBotDemo = () => {
     new Set()
   );
   const { messages, sendMessage, status, regenerate } = useChat();
+
+  // Debug: Log changes
+  console.log("🔍 messages count:", messages.length);
+  console.log("🔍 last message:", messages[messages.length - 1]);
 
   const handleSubmit = (message: PromptInputMessage) => {
     const hasText = Boolean(message.text);
@@ -177,281 +182,337 @@ const ChatBotDemo = () => {
       <ShootingStars className="fixed inset-0 z-0" />
       <div className="max-w-4xl mx-auto p-6 relative size-full h-screen">
         <div className="flex flex-col h-full relative z-10">
-        <Conversation className="h-full">
-          <ConversationContent>
-            {messages.map((message) => (
-              <div key={message.id}>
-                {message.role === "assistant" &&
-                  message.parts.filter((part) => part.type === "source-url")
-                    .length > 0 && (
-                    <Sources>
-                      <SourcesTrigger
-                        count={
-                          message.parts.filter(
-                            (part) => part.type === "source-url"
-                          ).length
-                        }
-                      />
-                      {message.parts
-                        .filter((part) => part.type === "source-url")
-                        .map((part, i) => (
-                          <SourcesContent key={`${message.id}-${i}`}>
-                            <Source
-                              key={`${message.id}-${i}`}
-                              href={part.url}
-                              title={part.url}
-                            />
-                          </SourcesContent>
-                        ))}
-                    </Sources>
-                  )}
-                {message.parts.map((part, i) => {
-                  switch (part.type) {
-                    case "text":
-                      // Processar texto para extrair dados de imagem
-                      let displayText = part.text;
-                      let imageData = null;
-
-                      // Verificar se há marcador de imagem no texto
-                      const imageMatch = part.text.match(/\[IMAGE_DATA:(.+?)\]/);
-                      if (imageMatch) {
-                        try {
-                          imageData = JSON.parse(imageMatch[1]);
-                          // Remover o marcador do texto exibido
-                          displayText = part.text.replace(/\[IMAGE_DATA:.+?\]/, '').trim();
-                        } catch (e) {
-                          console.error('Erro ao processar dados da imagem:', e);
-                        }
-                      }
-
-                      return (
-                        <Fragment key={`${message.id}-${i}`}>
-                          <Message from={message.role}>
-                            <MessageContent>
-                              <Response>{displayText}</Response>
-                              {/* Renderizar imagem se extraída do texto */}
-                              {imageData && (
-                                <div className="mt-4">
-                                  <img
-                                    src={imageData.dataUrl}
-                                    alt="Imagem gerada"
-                                    className="max-w-full h-auto rounded-lg border"
-                                    style={{ maxHeight: '400px' }}
-                                  />
-                                  <p className="text-xs text-muted-foreground mt-2">
-                                    Gerada com Imagen 3.0
-                                  </p>
-                                </div>
-                              )}
-                            </MessageContent>
-                          </Message>
-                          {message.role === "assistant" &&
-                            i === message.parts.length - 1 &&
-                            message.id ===
-                              messages[messages.length - 1]?.id && (
-                              <Actions className="mt-2">
-                                <Action
-                                  onClick={() => regenerate()}
-                                  label="Retry"
-                                >
-                                  <RefreshCcwIcon className="size-3" />
-                                </Action>
-                                <Action
-                                  onClick={() =>
-                                    handleCopy(part.text, `${message.id}-${i}`)
-                                  }
-                                  label={
-                                    copiedMessageIds.has(`${message.id}-${i}`)
-                                      ? "Copied!"
-                                      : "Copy"
-                                  }
-                                >
-                                  {copiedMessageIds.has(
-                                    `${message.id}-${i}`
-                                  ) ? (
-                                    <CheckIcon className="size-3" />
-                                  ) : (
-                                    <CopyIcon className="size-3" />
-                                  )}
-                                </Action>
-                              </Actions>
-                            )}
-                        </Fragment>
-                      );
-                    case "reasoning":
-                      return (
-                        <Reasoning
-                          key={`${message.id}-${i}`}
-                          className="w-full"
-                          isStreaming={
-                            status === "streaming" &&
-                            i === message.parts.length - 1 &&
-                            message.id === messages.at(-1)?.id
+          <Conversation className="h-full">
+            <ConversationContent>
+              {messages.map((message) => (
+                <div key={message.id}>
+                  {message.role === "assistant" &&
+                    message.parts.filter((part) => part.type === "source-url")
+                      .length > 0 && (
+                      <Sources>
+                        <SourcesTrigger
+                          count={
+                            message.parts.filter(
+                              (part) => part.type === "source-url"
+                            ).length
                           }
-                        >
-                          <ReasoningTrigger />
-                          <ReasoningContent>{part.text}</ReasoningContent>
-                        </Reasoning>
-                      );
-                    default:
-                      // Handle tool calls that start with 'tool-'
-                      if (
-                        part.type.startsWith("tool-") &&
-                        "state" in part &&
-                        "input" in part
-                      ) {
-                        return (
-                          <Tool key={`${message.id}-${i}`} defaultOpen>
-                            <ToolHeader
-                              title={part.type.replace("tool-", "")}
-                              type={part.type as `tool-${string}`}
-                              state={part.state}
-                            />
-                            <ToolContent>
-                              <ToolInput input={part.input} />
-                              <ToolOutput
-                                output={part.output}
-                                errorText={part.errorText}
+                        />
+                        {message.parts
+                          .filter((part) => part.type === "source-url")
+                          .map((part, i) => (
+                            <SourcesContent key={`${message.id}-${i}`}>
+                              <Source
+                                key={`${message.id}-${i}`}
+                                href={part.url}
+                                title={part.url}
                               />
-                            </ToolContent>
-                          </Tool>
-                        );
-                      }
-                      return null;
-                  }
-                })}
-              </div>
-            ))}
-            {status === "submitted" && <Loader />}
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
+                            </SourcesContent>
+                          ))}
+                      </Sources>
+                    )}
+                  {message.parts.map((part, i) => {
+                    console.log("🔍 Processing part:", {
+                      type: part.type,
+                      hasUrl: !!(part as any).url,
+                      urlPreview: (part as any).url?.substring(0, 50),
+                    });
+                    switch (part.type) {
+                      case "file":
+                        // Processar imagens geradas pelo Gemini multimodal
+                        const filePart = part as any;
+                        if (
+                          filePart.url &&
+                          filePart.url.startsWith("data:image/")
+                        ) {
+                          console.log(
+                            "🖼️ Imagem encontrada como file part do Gemini!"
+                          );
+                          return (
+                            <Fragment key={`${message.id}-${i}`}>
+                              <div className="mt-4">
+                                <img
+                                  src={filePart.url}
+                                  alt="Imagem gerada pelo Gemini"
+                                  className="max-w-full h-auto rounded-lg border"
+                                  style={{ maxHeight: "400px" }}
+                                />
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  Gerada com Gemini 2.5 Flash
+                                </p>
+                              </div>
+                            </Fragment>
+                          );
+                        }
+                        return null;
+                      case "text":
+                        // Procurar por marcador de imagem no texto
+                        let displayText = part.text;
+                        let imageData = null;
 
-        <PromptInput
-          onSubmit={handleSubmit}
-          className="mt-4"
-          globalDrop
-          multiple
-        >
-          <PromptInputBody>
-            <PromptInputAttachments>
-              {(attachment) => <PromptInputAttachment data={attachment} />}
-            </PromptInputAttachments>
-            <PromptInputTextarea
-              onChange={(e) => setInput(e.target.value)}
-              value={input}
-            />
-          </PromptInputBody>
-          <PromptInputToolbar>
-            <PromptInputTools>
-              <PromptInputActionMenu>
-                <PromptInputActionMenuTrigger />
-                <PromptInputActionMenuContent>
-                  <PromptInputActionAddAttachments />
-                </PromptInputActionMenuContent>
-              </PromptInputActionMenu>
-              <PromptInputButton
-                variant={webSearch ? "default" : "ghost"}
-                onClick={() => setWebSearch(!webSearch)}
-              >
-                <GlobeIcon size={16} />
-                <span>Pesquisa</span>
-              </PromptInputButton>
-              <PromptInputButton
-                variant={imageGeneration ? "default" : "ghost"}
-                onClick={() => setImageGeneration(!imageGeneration)}
-              >
-                <ImageIcon size={16} />
-                <span>Imagem</span>
-              </PromptInputButton>
-              <div className="flex items-center gap-2">
-                <PromptInputModelSelect
-                  onValueChange={(value) => {
-                    setModel(value);
-                  }}
-                  value={model}
-                >
-                  <PromptInputModelSelectTrigger>
-                    <PromptInputModelSelectValue>
-                      {models.find((m) => m.value === model)?.name ||
-                        "Selecione um modelo"}
-                    </PromptInputModelSelectValue>
-                  </PromptInputModelSelectTrigger>
-                  <PromptInputModelSelectContent>
-                    {models.map((model) => (
-                      <PromptInputModelSelectItem
-                        key={model.value}
-                        value={model.value}
-                        className="cursor-pointer"
-                      >
-                        <div className="flex flex-col gap-2 py-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">{model.name}</span>
-                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                              {model.speed}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            {model.description}
-                          </p>
-                          <div className="flex gap-1 flex-wrap">
-                            {model.capabilities.map((cap, i) => (
-                              <span
-                                key={i}
-                                className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs"
-                              >
-                                {cap}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </PromptInputModelSelectItem>
-                    ))}
-                  </PromptInputModelSelectContent>
-                </PromptInputModelSelect>
-
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <InfoIcon className="h-4 w-4 text-muted-foreground cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-60 bg-primary">
-                      {(() => {
-                        const selectedModel = models.find(
-                          (m) => m.value === model
+                        const imageMatch = part.text.match(
+                          /\[AI_SDK_IMAGE:(data:image\/[^;]+;base64,[^\]]+)\]/
                         );
-                        if (!selectedModel) return null;
+                        if (imageMatch) {
+                          imageData = { dataUrl: imageMatch[1] };
+                          displayText = part.text
+                            .replace(/\[AI_SDK_IMAGE:[^\]]+\]/, "")
+                            .trim();
+                          console.log(
+                            "🖼️ Imagem encontrada no texto via AI SDK!"
+                          );
+                        }
+
+                        console.log("🖼️ Text processing:", {
+                          hasMatch: !!imageMatch,
+                          hasImageData: !!imageData,
+                          textLength: part.text.length,
+                          textPreview: part.text.substring(0, 200),
+                          containsMarker: part.text.includes("[AI_SDK_IMAGE:"),
+                        });
 
                         return (
-                          <div className="space-y-1">
-                            <p className="font-medium text-sm">
-                              {selectedModel.name}
+                          <Fragment key={`${message.id}-${i}`}>
+                            <Message from={message.role}>
+                              <MessageContent>
+                                <Response>{displayText}</Response>
+                                {/* Renderizar imagem se extraída do texto */}
+                                {imageData && (
+                                  <div className="mt-4">
+                                    <img
+                                      src={imageData.dataUrl}
+                                      alt="Imagem gerada"
+                                      className="max-w-full h-auto rounded-lg border"
+                                      style={{ maxHeight: "400px" }}
+                                    />
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                      Gerada com Imagen 3.0
+                                    </p>
+                                  </div>
+                                )}
+                              </MessageContent>
+                            </Message>
+                            {message.role === "assistant" &&
+                              i === message.parts.length - 1 &&
+                              message.id ===
+                                messages[messages.length - 1]?.id && (
+                                <Actions className="mt-2">
+                                  <Action
+                                    onClick={() => regenerate()}
+                                    label="Retry"
+                                  >
+                                    <RefreshCcwIcon className="size-3" />
+                                  </Action>
+                                  <Action
+                                    onClick={() =>
+                                      handleCopy(
+                                        part.text,
+                                        `${message.id}-${i}`
+                                      )
+                                    }
+                                    label={
+                                      copiedMessageIds.has(`${message.id}-${i}`)
+                                        ? "Copied!"
+                                        : "Copy"
+                                    }
+                                  >
+                                    {copiedMessageIds.has(
+                                      `${message.id}-${i}`
+                                    ) ? (
+                                      <CheckIcon className="size-3" />
+                                    ) : (
+                                      <CopyIcon className="size-3" />
+                                    )}
+                                  </Action>
+                                </Actions>
+                              )}
+                          </Fragment>
+                        );
+                      case "reasoning":
+                        return (
+                          <Reasoning
+                            key={`${message.id}-${i}`}
+                            className="w-full"
+                            isStreaming={
+                              status === "streaming" &&
+                              i === message.parts.length - 1 &&
+                              message.id === messages.at(-1)?.id
+                            }
+                          >
+                            <ReasoningTrigger />
+                            <ReasoningContent>{part.text}</ReasoningContent>
+                          </Reasoning>
+                        );
+                      default:
+                        // Handle tool calls that start with 'tool-'
+                        if (
+                          part.type.startsWith("tool-") &&
+                          "state" in part &&
+                          "input" in part
+                        ) {
+                          return (
+                            <Tool key={`${message.id}-${i}`} defaultOpen>
+                              <ToolHeader
+                                title={part.type.replace("tool-", "")}
+                                type={part.type as `tool-${string}`}
+                                state={part.state}
+                              />
+                              <ToolContent>
+                                <ToolInput input={part.input} />
+                                <ToolOutput
+                                  output={part.output}
+                                  errorText={part.errorText}
+                                />
+                              </ToolContent>
+                            </Tool>
+                          );
+                        }
+                        return null;
+                    }
+                  })}
+                </div>
+              ))}
+              {status === "submitted" &&
+                (imageGeneration ? (
+                  <Message from="assistant">
+                    <MessageContent>
+                      <ImageSkeleton />
+                    </MessageContent>
+                  </Message>
+                ) : (
+                  <Loader />
+                ))}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
+
+          <PromptInput
+            onSubmit={handleSubmit}
+            className="mt-4"
+            globalDrop
+            multiple
+          >
+            <PromptInputBody>
+              <PromptInputAttachments>
+                {(attachment) => <PromptInputAttachment data={attachment} />}
+              </PromptInputAttachments>
+              <PromptInputTextarea
+                onChange={(e) => setInput(e.target.value)}
+                value={input}
+              />
+            </PromptInputBody>
+            <PromptInputToolbar>
+              <PromptInputTools>
+                <PromptInputActionMenu>
+                  <PromptInputActionMenuTrigger />
+                  <PromptInputActionMenuContent>
+                    <PromptInputActionAddAttachments />
+                  </PromptInputActionMenuContent>
+                </PromptInputActionMenu>
+                <PromptInputButton
+                  variant={webSearch ? "default" : "ghost"}
+                  onClick={() => setWebSearch(!webSearch)}
+                >
+                  <GlobeIcon size={16} />
+                  <span>Pesquisa</span>
+                </PromptInputButton>
+                <PromptInputButton
+                  variant={imageGeneration ? "default" : "ghost"}
+                  onClick={() => setImageGeneration(!imageGeneration)}
+                >
+                  <ImageIcon size={16} />
+                  <span>Imagem</span>
+                </PromptInputButton>
+                <div className="flex items-center gap-2">
+                  <PromptInputModelSelect
+                    onValueChange={(value) => {
+                      setModel(value);
+                    }}
+                    value={model}
+                  >
+                    <PromptInputModelSelectTrigger>
+                      <PromptInputModelSelectValue>
+                        {models.find((m) => m.value === model)?.name ||
+                          "Selecione um modelo"}
+                      </PromptInputModelSelectValue>
+                    </PromptInputModelSelectTrigger>
+                    <PromptInputModelSelectContent>
+                      {models.map((model) => (
+                        <PromptInputModelSelectItem
+                          key={model.value}
+                          value={model.value}
+                          className="cursor-pointer"
+                        >
+                          <div className="flex flex-col gap-2 py-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{model.name}</span>
+                              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                                {model.speed}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {model.description}
                             </p>
                             <div className="flex gap-1 flex-wrap">
-                              {selectedModel.capabilities.map((cap, i) => (
-                                <Badge
+                              {model.capabilities.map((cap, i) => (
+                                <span
                                   key={i}
-                                  className="px-1.5 py-0.5 rounded text-xs"
-                                  variant="secondary"
+                                  className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs"
                                 >
                                   {cap}
-                                </Badge>
+                                </span>
                               ))}
                             </div>
                           </div>
-                        );
-                      })()}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </PromptInputTools>
-            <PromptInputSubmit
-              disabled={status === "streaming"}
-              status={status}
-            />
-          </PromptInputToolbar>
-        </PromptInput>
+                        </PromptInputModelSelectItem>
+                      ))}
+                    </PromptInputModelSelectContent>
+                  </PromptInputModelSelect>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <InfoIcon className="h-4 w-4 text-muted-foreground cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        className="max-w-60 bg-primary"
+                      >
+                        {(() => {
+                          const selectedModel = models.find(
+                            (m) => m.value === model
+                          );
+                          if (!selectedModel) return null;
+
+                          return (
+                            <div className="space-y-1">
+                              <p className="font-medium text-sm">
+                                {selectedModel.name}
+                              </p>
+                              <div className="flex gap-1 flex-wrap">
+                                {selectedModel.capabilities.map((cap, i) => (
+                                  <Badge
+                                    key={i}
+                                    className="px-1.5 py-0.5 rounded text-xs"
+                                    variant="secondary"
+                                  >
+                                    {cap}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </PromptInputTools>
+              <PromptInputSubmit
+                disabled={status === "streaming"}
+                status={status}
+              />
+            </PromptInputToolbar>
+          </PromptInput>
         </div>
       </div>
     </>

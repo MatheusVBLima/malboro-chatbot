@@ -7,7 +7,8 @@
       "Bash(npm uninstall:*)",
       "WebSearch",
       "WebFetch(domain:ai-sdk.dev)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:sdk.vercel.ai)"
     ],
     "deny": [],
     "ask": []
