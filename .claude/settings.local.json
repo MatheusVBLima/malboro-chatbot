@@ -8,9 +8,18 @@
       "WebSearch",
       "WebFetch(domain:ai-sdk.dev)",
       "Bash(npx tsc:*)",
-      "WebFetch(domain:sdk.vercel.ai)"
+      "WebFetch(domain:sdk.vercel.ai)",
+      "Bash(git checkout:*)",
+      "mcp__shadcn__get_project_registries",
+      "mcp__shadcn__search_items_in_registries",
+      "mcp__shadcn__get_add_command_for_items",
+      "Bash(npx shadcn@latest add @shadcn/checkbox)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
 }
