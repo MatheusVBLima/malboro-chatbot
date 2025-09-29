@@ -38,6 +38,7 @@ import {
   CheckIcon,
   InfoIcon,
   ImageIcon,
+  BotIcon,
 } from "lucide-react";
 import {
   Tooltip,
@@ -65,6 +66,16 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import { Badge } from "@/components/ui/badge";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
 import { StarsBackground } from "@/components/ui/stars-background";
 import { ImageSkeleton } from "@/components/ui/image-skeleton";
 import { ShootingStars } from "@/components/ui/shooting-stars";
@@ -117,6 +128,7 @@ const ChatBotDemo = () => {
   const [model, setModel] = useState<string>(models[0].value);
   const [webSearch, setWebSearch] = useState(false);
   const [imageGeneration, setImageGeneration] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [copiedMessageIds, setCopiedMessageIds] = useState<Set<string>>(
     new Set()
   );
@@ -413,98 +425,165 @@ const ChatBotDemo = () => {
                   onClick={() => setWebSearch(!webSearch)}
                 >
                   <GlobeIcon size={16} />
-                  <span>Pesquisa</span>
+                  <span className="hidden sm:inline">Pesquisa</span>
                 </PromptInputButton>
                 <PromptInputButton
                   variant={imageGeneration ? "default" : "ghost"}
                   onClick={() => setImageGeneration(!imageGeneration)}
                 >
                   <ImageIcon size={16} />
-                  <span>Imagem</span>
+                  <span className="hidden sm:inline">Imagem</span>
                 </PromptInputButton>
                 <div className="flex items-center gap-2">
-                  <PromptInputModelSelect
-                    onValueChange={(value) => {
-                      setModel(value);
-                    }}
-                    value={model}
-                  >
-                    <PromptInputModelSelectTrigger>
-                      <PromptInputModelSelectValue>
-                        {models.find((m) => m.value === model)?.name ||
-                          "Selecione um modelo"}
-                      </PromptInputModelSelectValue>
-                    </PromptInputModelSelectTrigger>
-                    <PromptInputModelSelectContent>
-                      {models.map((model) => (
-                        <PromptInputModelSelectItem
-                          key={model.value}
-                          value={model.value}
-                          className="cursor-pointer"
-                        >
-                          <div className="flex flex-col gap-2 py-1">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium">{model.name}</span>
-                              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                                {model.speed}
-                              </span>
-                            </div>
-                            <p className="text-xs text-muted-foreground leading-relaxed">
-                              {model.description}
-                            </p>
-                            <div className="flex gap-1 flex-wrap">
-                              {model.capabilities.map((cap, i) => (
-                                <span
-                                  key={i}
-                                  className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs"
-                                >
-                                  {cap}
+                  {/* Desktop: Select normal */}
+                  <div className="hidden sm:flex sm:items-center sm:gap-2">
+                    <PromptInputModelSelect
+                      onValueChange={(value) => {
+                        setModel(value);
+                      }}
+                      value={model}
+                    >
+                      <PromptInputModelSelectTrigger>
+                        <PromptInputModelSelectValue>
+                          {models.find((m) => m.value === model)?.name ||
+                            "Selecione um modelo"}
+                        </PromptInputModelSelectValue>
+                      </PromptInputModelSelectTrigger>
+                      <PromptInputModelSelectContent>
+                        {models.map((model) => (
+                          <PromptInputModelSelectItem
+                            key={model.value}
+                            value={model.value}
+                            className="cursor-pointer"
+                          >
+                            <div className="flex flex-col gap-2 py-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium">{model.name}</span>
+                                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                                  {model.speed}
                                 </span>
-                              ))}
-                            </div>
-                          </div>
-                        </PromptInputModelSelectItem>
-                      ))}
-                    </PromptInputModelSelectContent>
-                  </PromptInputModelSelect>
-
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <InfoIcon className="h-4 w-4 text-muted-foreground cursor-help" />
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="top"
-                        className="max-w-60 bg-primary"
-                      >
-                        {(() => {
-                          const selectedModel = models.find(
-                            (m) => m.value === model
-                          );
-                          if (!selectedModel) return null;
-
-                          return (
-                            <div className="space-y-1">
-                              <p className="font-medium text-sm">
-                                {selectedModel.name}
+                              </div>
+                              <p className="text-xs text-muted-foreground leading-relaxed">
+                                {model.description}
                               </p>
                               <div className="flex gap-1 flex-wrap">
-                                {selectedModel.capabilities.map((cap, i) => (
-                                  <Badge
+                                {model.capabilities.map((cap, i) => (
+                                  <span
                                     key={i}
-                                    className="px-1.5 py-0.5 rounded text-xs"
-                                    variant="secondary"
+                                    className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs"
                                   >
                                     {cap}
-                                  </Badge>
+                                  </span>
                                 ))}
                               </div>
                             </div>
-                          );
-                        })()}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                          </PromptInputModelSelectItem>
+                        ))}
+                      </PromptInputModelSelectContent>
+                    </PromptInputModelSelect>
+
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <InfoIcon className="h-4 w-4 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          className="max-w-60 bg-primary"
+                        >
+                          {(() => {
+                            const selectedModel = models.find(
+                              (m) => m.value === model
+                            );
+                            if (!selectedModel) return null;
+
+                            return (
+                              <div className="space-y-1">
+                                <p className="font-medium text-sm">
+                                  {selectedModel.name}
+                                </p>
+                                <div className="flex gap-1 flex-wrap">
+                                  {selectedModel.capabilities.map((cap, i) => (
+                                    <Badge
+                                      key={i}
+                                      className="px-1.5 py-0.5 rounded text-xs"
+                                      variant="secondary"
+                                    >
+                                      {cap}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+
+                  {/* Mobile: Drawer com ícone de robô */}
+                  <div className="sm:hidden">
+                    <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+                      <DrawerTrigger asChild>
+                        <PromptInputButton variant="ghost">
+                          <BotIcon size={16} />
+                        </PromptInputButton>
+                      </DrawerTrigger>
+                      <DrawerContent>
+                        <DrawerHeader>
+                          <DrawerTitle>Selecionar Modelo</DrawerTitle>
+                          <DrawerDescription>
+                            Escolha o modelo de IA para sua conversa
+                          </DrawerDescription>
+                        </DrawerHeader>
+                        <div className="px-4 pb-4 space-y-2 max-h-96 overflow-y-auto">
+                          {models.map((modelOption) => (
+                            <button
+                              key={modelOption.value}
+                              onClick={() => {
+                                setModel(modelOption.value);
+                                setIsDrawerOpen(false);
+                              }}
+                              className={`w-full text-left p-4 rounded-lg border transition-colors ${
+                                model === modelOption.value
+                                  ? "bg-primary/10 border-primary"
+                                  : "bg-background border-border hover:bg-accent"
+                              }`}
+                            >
+                              <div className="flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{modelOption.name}</span>
+                                  <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                                    {modelOption.speed}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                  {modelOption.description}
+                                </p>
+                                <div className="flex gap-1 flex-wrap">
+                                  {modelOption.capabilities.map((cap, i) => (
+                                    <span
+                                      key={i}
+                                      className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs"
+                                    >
+                                      {cap}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                        <DrawerFooter>
+                          <DrawerClose asChild>
+                            <button className="w-full p-2 border rounded-lg bg-background hover:bg-accent transition-colors">
+                              Fechar
+                            </button>
+                          </DrawerClose>
+                        </DrawerFooter>
+                      </DrawerContent>
+                    </Drawer>
+                  </div>
                 </div>
               </PromptInputTools>
               <PromptInputSubmit
