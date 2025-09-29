@@ -28,9 +28,38 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Actions, Action } from "@/components/ai-elements/actions";
-import { Fragment, useState } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { useChat } from "@ai-sdk/react";
 import { Response } from "@/components/ai-elements/response";
+import {
+  Suggestions,
+  Suggestion,
+} from "@/components/ai-elements/suggestion";
+import {
+  InlineCitation,
+  InlineCitationText,
+  InlineCitationCard,
+  InlineCitationCardTrigger,
+  InlineCitationCardBody,
+  InlineCitationCarousel,
+  InlineCitationCarouselContent,
+  InlineCitationCarouselItem,
+  InlineCitationCarouselHeader,
+  InlineCitationCarouselIndex,
+  InlineCitationCarouselPrev,
+  InlineCitationCarouselNext,
+  InlineCitationSource,
+} from "@/components/ai-elements/inline-citation";
+import {
+  Context,
+  ContextTrigger,
+  ContextContent,
+  ContextContentHeader,
+  ContextContentBody,
+  ContextInputUsage,
+  ContextOutputUsage,
+  ContextContentFooter,
+} from "@/components/ai-elements/context";
 import {
   GlobeIcon,
   RefreshCcwIcon,
@@ -39,6 +68,12 @@ import {
   InfoIcon,
   ImageIcon,
   BotIcon,
+  StopCircleIcon,
+  DownloadIcon,
+  PlusIcon,
+  MessageSquareIcon,
+  TrashIcon,
+  EditIcon,
 } from "lucide-react";
 import {
   Tooltip,
@@ -79,6 +114,7 @@ import {
 import { StarsBackground } from "@/components/ui/stars-background";
 import { ImageSkeleton } from "@/components/ui/image-skeleton";
 import { ShootingStars } from "@/components/ui/shooting-stars";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const models = [
   {
@@ -123,6 +159,23 @@ const models = [
   },
 ];
 
+const suggestionPrompts = [
+  "Explique como funciona a computação quântica",
+  "Crie uma receita saudável com frango",
+  "Qual a diferença entre React e Vue?",
+  "Me ajude a escrever um e-mail profissional",
+  "Sugira ideias para um projeto pessoal",
+  "Como funciona o machine learning?",
+];
+
+// Tipos para histórico de conversas
+type ConversationMetadata = {
+  id: string;
+  title: string;
+  timestamp: number;
+  messageCount: number;
+};
+
 const ChatBotDemo = () => {
   const [input, setInput] = useState("");
   const [model, setModel] = useState<string>(models[0].value);
@@ -132,11 +185,308 @@ const ChatBotDemo = () => {
   const [copiedMessageIds, setCopiedMessageIds] = useState<Set<string>>(
     new Set()
   );
-  const { messages, sendMessage, status, regenerate } = useChat();
+  const [conversations, setConversations] = useState<ConversationMetadata[]>(
+    []
+  );
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | null
+  >(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportOnlyAI, setExportOnlyAI] = useState(false);
+  const [exportingMessageId, setExportingMessageId] = useState<string | null>(
+    null
+  );
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [totalTokens, setTotalTokens] = useState({ input: 0, output: 0 });
+  const { messages, sendMessage, status, regenerate, stop, setMessages } =
+    useChat();
 
   // Debug: Log changes
   console.log("🔍 messages count:", messages.length);
   console.log("🔍 last message:", messages[messages.length - 1]);
+
+  // Carregar conversas do localStorage ao iniciar
+  useEffect(() => {
+    const savedConversations = localStorage.getItem("conversations");
+    if (savedConversations) {
+      setConversations(JSON.parse(savedConversations));
+    }
+  }, []);
+
+  // Salvar mensagens no localStorage quando mudarem
+  useEffect(() => {
+    if (messages.length > 0) {
+      const conversationId =
+        currentConversationId || `conv-${Date.now()}`;
+      if (!currentConversationId) {
+        setCurrentConversationId(conversationId);
+      }
+
+      localStorage.setItem(
+        `conversation-${conversationId}`,
+        JSON.stringify(messages)
+      );
+
+      // Atualizar metadados da conversa
+      const title =
+        messages[0]?.parts[0]?.type === "text"
+          ? messages[0].parts[0].text.substring(0, 50)
+          : "Nova conversa";
+
+      const updatedConversations = conversations.filter(
+        (c) => c.id !== conversationId
+      );
+      updatedConversations.unshift({
+        id: conversationId,
+        title,
+        timestamp: Date.now(),
+        messageCount: messages.length,
+      });
+
+      setConversations(updatedConversations);
+      localStorage.setItem(
+        "conversations",
+        JSON.stringify(updatedConversations)
+      );
+
+      // Calcular tokens estimados (aproximação: 1 token ≈ 4 caracteres)
+      let inputTokens = 0;
+      let outputTokens = 0;
+
+      messages.forEach((msg) => {
+        const textContent = msg.parts
+          .filter((p) => p.type === "text")
+          .map((p) => p.text)
+          .join(" ");
+        const estimatedTokens = Math.ceil(textContent.length / 4);
+
+        if (msg.role === "user") {
+          inputTokens += estimatedTokens;
+        } else {
+          outputTokens += estimatedTokens;
+        }
+      });
+
+      setTotalTokens({ input: inputTokens, output: outputTokens });
+    }
+  }, [messages]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Shift+N: Nova conversa
+      if (e.ctrlKey && e.shiftKey && e.key === "N") {
+        e.preventDefault();
+        handleNewConversation();
+      }
+      // Esc: Parar geração ou fechar menus
+      if (e.key === "Escape") {
+        if (status === "streaming" || status === "submitted") {
+          e.preventDefault();
+          stop();
+        } else if (showExportMenu) {
+          setShowExportMenu(false);
+        } else if (exportingMessageId) {
+          setExportingMessageId(null);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [status, stop, showExportMenu, exportingMessageId]);
+
+  const handleNewConversation = () => {
+    setMessages([]);
+    setCurrentConversationId(null);
+    setInput("");
+  };
+
+  const handleLoadConversation = (conversationId: string) => {
+    const savedMessages = localStorage.getItem(
+      `conversation-${conversationId}`
+    );
+    if (savedMessages) {
+      setMessages(JSON.parse(savedMessages));
+      setCurrentConversationId(conversationId);
+      setShowHistory(false);
+    }
+  };
+
+  const handleDeleteConversation = (conversationId: string) => {
+    localStorage.removeItem(`conversation-${conversationId}`);
+    const updatedConversations = conversations.filter(
+      (c) => c.id !== conversationId
+    );
+    setConversations(updatedConversations);
+    localStorage.setItem("conversations", JSON.stringify(updatedConversations));
+
+    if (currentConversationId === conversationId) {
+      handleNewConversation();
+    }
+  };
+
+  const removeMarkdownFormatting = (text: string): string => {
+    return text
+      .replace(/\*\*(.+?)\*\*/g, "$1") // Remove bold
+      .replace(/\*(.+?)\*/g, "$1") // Remove italic
+      .replace(/`(.+?)`/g, "$1") // Remove inline code
+      .replace(/```[\s\S]*?```/g, (match) => {
+        // Remove code block markers but keep content
+        return match.replace(/```\w*\n?/g, "");
+      })
+      .replace(/#{1,6}\s+/g, "") // Remove headers
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1") // Remove links, keep text
+      .replace(/^\s*[-*+]\s+/gm, "• ") // Convert lists to bullets
+      .replace(/^\s*\d+\.\s+/gm, "• "); // Convert numbered lists to bullets
+  };
+
+  const handleExportConversation = (
+    format: "markdown" | "txt",
+    aiOnly: boolean = false
+  ) => {
+    let content = "";
+    let fileExtension = "";
+    let mimeType = "";
+
+    const messagesToExport = aiOnly
+      ? messages.filter((msg) => msg.role === "assistant")
+      : messages;
+
+    if (format === "markdown") {
+      content = messagesToExport
+        .map((msg) => {
+          const text = msg.parts.find((p) => p.type === "text")?.text || "";
+          if (aiOnly) {
+            return text;
+          }
+          const role = msg.role === "user" ? "**Você**" : "**Assistente**";
+          return `${role}:\n${text}\n`;
+        })
+        .join(aiOnly ? "\n\n---\n\n" : "\n---\n\n");
+      fileExtension = "md";
+      mimeType = "text/markdown";
+    } else {
+      // Formato texto simples (compatível com Word) - sem markdown
+      content = messagesToExport
+        .map((msg) => {
+          const text = msg.parts.find((p) => p.type === "text")?.text || "";
+          let cleanText = removeMarkdownFormatting(text);
+          // Remove linhas com apenas --- ou ===
+          cleanText = cleanText.replace(/^[-=]{3,}\s*$/gm, "");
+          // Remove múltiplas linhas vazias consecutivas
+          cleanText = cleanText.replace(/\n{3,}/g, "\n\n");
+          if (aiOnly) {
+            return cleanText.trim();
+          }
+          const role = msg.role === "user" ? "VOCÊ" : "ASSISTENTE";
+          return `${role}:\n${cleanText}\n`;
+        })
+        .join(aiOnly ? "\n\n" + "=".repeat(50) + "\n\n" : "\n" + "=".repeat(50) + "\n\n");
+      fileExtension = "txt";
+      mimeType = "text/plain";
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `conversa-${Date.now()}.${fileExtension}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportSingleMessage = (
+    messageText: string,
+    format: "markdown" | "txt"
+  ) => {
+    let content = "";
+    let fileExtension = "";
+    let mimeType = "";
+
+    if (format === "markdown") {
+      content = messageText;
+      fileExtension = "md";
+      mimeType = "text/markdown";
+    } else {
+      content = removeMarkdownFormatting(messageText);
+      // Remove linhas com apenas --- ou ===
+      content = content.replace(/^[-=]{3,}\s*$/gm, "");
+      // Remove múltiplas linhas vazias consecutivas
+      content = content.replace(/\n{3,}/g, "\n\n");
+      content = content.trim();
+      fileExtension = "txt";
+      mimeType = "text/plain";
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mensagem-${Date.now()}.${fileExtension}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setInput(suggestion);
+  };
+
+  const handleEditMessage = (messageId: string, currentText: string) => {
+    // Parar geração se estiver em andamento
+    if (status === "streaming" || status === "submitted") {
+      stop();
+    }
+
+    setEditingMessageId(messageId);
+    setEditingText(currentText);
+  };
+
+  const handleSaveEdit = (messageId: string) => {
+    const messageIndex = messages.findIndex((m) => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    // Parar qualquer geração em andamento
+    if (status === "streaming" || status === "submitted") {
+      stop();
+    }
+
+    // Atualizar a mensagem editada
+    const updatedMessages = [...messages];
+    const message = updatedMessages[messageIndex];
+
+    if (message.parts[0]?.type === "text") {
+      message.parts[0].text = editingText;
+    }
+
+    // Remover todas as mensagens após a editada
+    const newMessages = updatedMessages.slice(0, messageIndex + 1);
+    setMessages(newMessages);
+
+    // Aguardar um momento antes de reenviar para garantir que o stop foi processado
+    setTimeout(() => {
+      sendMessage(
+        { text: editingText },
+        {
+          body: {
+            model: model,
+            webSearch: webSearch,
+            imageGeneration: imageGeneration,
+          },
+        }
+      );
+    }, 100);
+
+    setEditingMessageId(null);
+    setEditingText("");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingText("");
+  };
 
   const handleSubmit = (message: PromptInputMessage) => {
     const hasText = Boolean(message.text);
@@ -194,8 +544,187 @@ const ChatBotDemo = () => {
       <ShootingStars className="fixed inset-0 z-0" />
       <div className="max-w-4xl mx-auto p-6 relative size-full h-screen">
         <div className="flex flex-col h-full relative z-10">
+          {/* Header com botões de ação */}
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <div className="flex items-center gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={handleNewConversation}
+                      className="p-2 hover:bg-accent rounded-lg transition-colors"
+                    >
+                      <PlusIcon className="h-5 w-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Nova conversa (Ctrl+Shift+N)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setShowHistory(!showHistory)}
+                      className="p-2 hover:bg-accent rounded-lg transition-colors"
+                    >
+                      <MessageSquareIcon className="h-5 w-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Histórico de conversas</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {messages.length > 0 && totalTokens.input + totalTokens.output > 0 && (
+                <Context
+                  usedTokens={totalTokens.input + totalTokens.output}
+                  maxTokens={1000000}
+                  usage={{
+                    inputTokens: totalTokens.input,
+                    outputTokens: totalTokens.output,
+                    totalTokens: totalTokens.input + totalTokens.output,
+                  }}
+                  modelId="gemini-2.0-flash"
+                >
+                  <ContextTrigger />
+                  <ContextContent>
+                    <ContextContentHeader />
+                    <ContextContentBody>
+                      <div className="space-y-2">
+                        <ContextInputUsage />
+                        <ContextOutputUsage />
+                      </div>
+                    </ContextContentBody>
+                    <ContextContentFooter />
+                  </ContextContent>
+                </Context>
+              )}
+              {messages.length > 0 && (
+                <div className="relative">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setShowExportMenu(!showExportMenu)}
+                          className="p-2 hover:bg-accent rounded-lg transition-colors"
+                        >
+                          <DownloadIcon className="h-5 w-5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Exportar conversa</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  {showExportMenu && (
+                    <div className="absolute right-0 top-12 bg-background border rounded-lg shadow-lg p-3 z-50 min-w-[200px]">
+                      <div className="mb-2 pb-2 border-b">
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <Checkbox
+                            checked={exportOnlyAI}
+                            onCheckedChange={(checked) => setExportOnlyAI(checked === true)}
+                          />
+                          <span>Apenas respostas da IA</span>
+                        </label>
+                      </div>
+                      <button
+                        onClick={() => {
+                          handleExportConversation("txt", exportOnlyAI);
+                          setShowExportMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-accent rounded text-sm"
+                      >
+                        Texto (.txt)
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleExportConversation("markdown", exportOnlyAI);
+                          setShowExportMenu(false);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-accent rounded text-sm"
+                      >
+                        Markdown (.md)
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Histórico de conversas */}
+          {showHistory && (
+            <div className="mb-4 p-4 bg-background/50 backdrop-blur-sm rounded-lg border max-h-60 overflow-y-auto">
+              <h3 className="font-semibold mb-3">Conversas anteriores</h3>
+              {conversations.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma conversa salva ainda
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {conversations.map((conv) => (
+                    <div
+                      key={conv.id}
+                      className="flex items-center justify-between p-2 hover:bg-accent rounded-lg transition-colors"
+                    >
+                      <button
+                        onClick={() => handleLoadConversation(conv.id)}
+                        className="flex-1 text-left"
+                      >
+                        <p className="text-sm font-medium truncate">
+                          {conv.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(conv.timestamp).toLocaleDateString()} -{" "}
+                          {conv.messageCount} mensagens
+                        </p>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteConversation(conv.id)}
+                        className="p-1 hover:bg-destructive/20 rounded"
+                      >
+                        <TrashIcon className="h-4 w-4 text-destructive" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <Conversation className="h-full">
             <ConversationContent>
+              {/* Sugestões quando não há mensagens */}
+              {messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full space-y-6 px-4">
+                  <div className="text-center space-y-2">
+                    <h2 className="text-2xl font-bold">
+                      Olá! Como posso ajudar?
+                    </h2>
+                    <p className="text-muted-foreground">
+                      Escolha uma sugestão ou digite sua pergunta
+                    </p>
+                  </div>
+                  <div className="w-full max-w-3xl">
+                    <Suggestions>
+                      {suggestionPrompts.map((prompt, i) => (
+                        <Suggestion
+                          key={i}
+                          suggestion={prompt}
+                          onClick={handleSuggestionClick}
+                        />
+                      ))}
+                    </Suggestions>
+                  </div>
+                </div>
+              )}
+
               {messages.map((message) => (
                 <div key={message.id}>
                   {message.role === "assistant" &&
@@ -286,20 +815,54 @@ const ChatBotDemo = () => {
                           <Fragment key={`${message.id}-${i}`}>
                             <Message from={message.role}>
                               <MessageContent>
-                                <Response>{displayText}</Response>
-                                {/* Renderizar imagem se extraída do texto */}
-                                {imageData && (
-                                  <div className="mt-4">
-                                    <img
-                                      src={imageData.dataUrl}
-                                      alt="Imagem gerada"
-                                      className="max-w-full h-auto rounded-lg border"
-                                      style={{ maxHeight: "400px" }}
+                                {/* Modo de edição para mensagens do usuário */}
+                                {message.role === "user" &&
+                                editingMessageId === message.id ? (
+                                  <div className="space-y-2">
+                                    <textarea
+                                      value={editingText}
+                                      onChange={(e) =>
+                                        setEditingText(e.target.value)
+                                      }
+                                      className="w-full p-2 border rounded-lg bg-background resize-none"
+                                      rows={3}
+                                      autoFocus
                                     />
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                      Gerada com Imagen 3.0
-                                    </p>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() =>
+                                          handleSaveEdit(message.id)
+                                        }
+                                        className="px-3 py-1 bg-primary text-primary-foreground rounded-lg text-sm hover:bg-primary/90"
+                                      >
+                                        Salvar e reenviar
+                                      </button>
+                                      <button
+                                        onClick={handleCancelEdit}
+                                        className="px-3 py-1 bg-secondary text-secondary-foreground rounded-lg text-sm hover:bg-secondary/80"
+                                      >
+                                        Cancelar
+                                      </button>
+                                    </div>
                                   </div>
+                                ) : (
+                                  <>
+                                    <Response>{displayText}</Response>
+                                    {/* Renderizar imagem se extraída do texto */}
+                                    {imageData && (
+                                      <div className="mt-4">
+                                        <img
+                                          src={imageData.dataUrl}
+                                          alt="Imagem gerada"
+                                          className="max-w-full h-auto rounded-lg border"
+                                          style={{ maxHeight: "400px" }}
+                                        />
+                                        <p className="text-xs text-muted-foreground mt-2">
+                                          Gerada com Imagen 3.0
+                                        </p>
+                                      </div>
+                                    )}
+                                  </>
                                 )}
                               </MessageContent>
                             </Message>
@@ -308,33 +871,106 @@ const ChatBotDemo = () => {
                               message.id ===
                                 messages[messages.length - 1]?.id && (
                                 <Actions className="mt-2">
-                                  <Action
-                                    onClick={() => regenerate()}
-                                    label="Retry"
-                                  >
-                                    <RefreshCcwIcon className="size-3" />
-                                  </Action>
-                                  <Action
-                                    onClick={() =>
-                                      handleCopy(
-                                        part.text,
-                                        `${message.id}-${i}`
-                                      )
-                                    }
-                                    label={
-                                      copiedMessageIds.has(`${message.id}-${i}`)
-                                        ? "Copied!"
-                                        : "Copy"
-                                    }
-                                  >
-                                    {copiedMessageIds.has(
-                                      `${message.id}-${i}`
-                                    ) ? (
-                                      <CheckIcon className="size-3" />
-                                    ) : (
-                                      <CopyIcon className="size-3" />
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Action
+                                          onClick={() => regenerate()}
+                                          label="Retry"
+                                        >
+                                          <RefreshCcwIcon className="size-3" />
+                                        </Action>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Regenerar resposta</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Action
+                                          onClick={() =>
+                                            handleCopy(
+                                              part.text,
+                                              `${message.id}-${i}`
+                                            )
+                                          }
+                                          label={
+                                            copiedMessageIds.has(`${message.id}-${i}`)
+                                              ? "Copied!"
+                                              : "Copy"
+                                          }
+                                        >
+                                          {copiedMessageIds.has(
+                                            `${message.id}-${i}`
+                                          ) ? (
+                                            <CheckIcon className="size-3" />
+                                          ) : (
+                                            <CopyIcon className="size-3" />
+                                          )}
+                                        </Action>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>
+                                          {copiedMessageIds.has(`${message.id}-${i}`)
+                                            ? "Copiado!"
+                                            : "Copiar mensagem"}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <div className="relative">
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Action
+                                            onClick={() =>
+                                              setExportingMessageId(
+                                                exportingMessageId === message.id
+                                                  ? null
+                                                  : message.id
+                                              )
+                                            }
+                                            label="Export"
+                                          >
+                                            <DownloadIcon className="size-3" />
+                                          </Action>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>Exportar mensagem</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                    {exportingMessageId === message.id && (
+                                      <div className="absolute left-0 top-8 bg-background border rounded-lg shadow-lg p-2 z-50 min-w-[140px]">
+                                        <button
+                                          onClick={() => {
+                                            handleExportSingleMessage(
+                                              part.text,
+                                              "txt"
+                                            );
+                                            setExportingMessageId(null);
+                                          }}
+                                          className="w-full text-left px-3 py-2 hover:bg-accent rounded text-sm"
+                                        >
+                                          Texto (.txt)
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            handleExportSingleMessage(
+                                              part.text,
+                                              "markdown"
+                                            );
+                                            setExportingMessageId(null);
+                                          }}
+                                          className="w-full text-left px-3 py-2 hover:bg-accent rounded text-sm"
+                                        >
+                                          Markdown (.md)
+                                        </button>
+                                      </div>
                                     )}
-                                  </Action>
+                                  </div>
                                 </Actions>
                               )}
                           </Fragment>
@@ -381,6 +1017,26 @@ const ChatBotDemo = () => {
                         return null;
                     }
                   })}
+                  {/* Botão de editar para mensagens do usuário */}
+                  {message.role === "user" && editingMessageId !== message.id && (
+                    <div className="flex w-full justify-end">
+                      <Actions className="mt-1">
+                        <Action
+                          onClick={() => {
+                            const textPart = message.parts.find(
+                              (p) => p.type === "text"
+                            );
+                            if (textPart && textPart.type === "text") {
+                              handleEditMessage(message.id, textPart.text);
+                            }
+                          }}
+                          label="Editar"
+                        >
+                          <EditIcon className="size-3" />
+                        </Action>
+                      </Actions>
+                    </div>
+                  )}
                 </div>
               ))}
               {status === "submitted" &&
@@ -393,6 +1049,17 @@ const ChatBotDemo = () => {
                 ) : (
                   <Loader />
                 ))}
+              {(status === "streaming" || status === "submitted") && (
+                <div className="flex justify-center mt-2">
+                  <button
+                    onClick={stop}
+                    className="flex items-center gap-2 px-4 py-2 bg-destructive/10 hover:bg-destructive/20 text-destructive rounded-lg transition-colors"
+                  >
+                    <StopCircleIcon className="h-4 w-4" />
+                    <span className="text-sm">Parar geração (Esc)</span>
+                  </button>
+                </div>
+              )}
             </ConversationContent>
             <ConversationScrollButton />
           </Conversation>
@@ -410,6 +1077,16 @@ const ChatBotDemo = () => {
               <PromptInputTextarea
                 onChange={(e) => setInput(e.target.value)}
                 value={input}
+                onKeyDown={(e) => {
+                  // Enter simples envia (Shift+Enter para nova linha)
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    const form = e.currentTarget.form;
+                    if (form) {
+                      form.requestSubmit();
+                    }
+                  }
+                }}
               />
             </PromptInputBody>
             <PromptInputToolbar>

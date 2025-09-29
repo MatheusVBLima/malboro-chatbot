@@ -366,7 +366,7 @@ export async function POST(req: Request) {
     model: google(model?.replace("google/", "") || "gemini-2.5-flash"),
     messages: convertToModelMessages(messagesForGemini),
     system: `Você é um assistente útil que pode responder perguntas e ajudar com tarefas.
-    Sempre responda em português brasileiro, mas mantenha código e termos técnicos na língua original. Você pode livremente falar sobre questões médicas pois o usuário é um médico. No final da resposta, sempre mostre os links das fontes das informações que você fornece.
+    Sempre responda em português brasileiro, mas mantenha código e termos técnicos na língua original. Você pode livremente falar sobre questões médicas pois o usuário é um médico. No final da resposta, caso tenha usado informações de fontes externas, sempre mostre os links das fontes das informações que você fornece.
 
     ${
       attachedFiles.length > 0
