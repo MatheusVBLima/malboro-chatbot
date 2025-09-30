@@ -74,6 +74,8 @@ import {
   MessageSquareIcon,
   TrashIcon,
   EditIcon,
+  FileTextIcon,
+  FileIcon,
 } from "lucide-react";
 import {
   Tooltip,
@@ -111,6 +113,15 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
 import { StarsBackground } from "@/components/ui/stars-background";
 import { ImageSkeleton } from "@/components/ui/image-skeleton";
 import { ShootingStars } from "@/components/ui/shooting-stars";
@@ -192,11 +203,7 @@ const ChatBotDemo = () => {
     string | null
   >(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportOnlyAI, setExportOnlyAI] = useState(false);
-  const [exportingMessageId, setExportingMessageId] = useState<string | null>(
-    null
-  );
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [totalTokens, setTotalTokens] = useState({ input: 0, output: 0 });
@@ -281,22 +288,18 @@ const ChatBotDemo = () => {
         e.preventDefault();
         handleNewConversation();
       }
-      // Esc: Parar geração ou fechar menus
+      // Esc: Parar geração
       if (e.key === "Escape") {
         if (status === "streaming" || status === "submitted") {
           e.preventDefault();
           stop();
-        } else if (showExportMenu) {
-          setShowExportMenu(false);
-        } else if (exportingMessageId) {
-          setExportingMessageId(null);
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [status, stop, showExportMenu, exportingMessageId]);
+  }, [status, stop]);
 
   const handleNewConversation = () => {
     setMessages([]);
@@ -343,10 +346,41 @@ const ChatBotDemo = () => {
       .replace(/^\s*\d+\.\s+/gm, "• "); // Convert numbered lists to bullets
   };
 
-  const handleExportConversation = (
-    format: "markdown" | "txt",
+  const handleExportConversation = async (
+    format: "markdown" | "txt" | "pdf",
     aiOnly: boolean = false
   ) => {
+    if (format === "pdf") {
+      try {
+        const response = await fetch("/api/export-pdf", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages,
+            aiOnly,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Erro ao gerar PDF");
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `conversa-${Date.now()}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Erro ao exportar PDF:", error);
+        alert("Erro ao exportar PDF. Tente novamente.");
+      }
+      return;
+    }
+
     let content = "";
     let fileExtension = "";
     let mimeType = "";
@@ -398,10 +432,47 @@ const ChatBotDemo = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleExportSingleMessage = (
+  const handleExportSingleMessage = async (
     messageText: string,
-    format: "markdown" | "txt"
+    format: "markdown" | "txt" | "pdf",
+    messageRole: "user" | "assistant"
   ) => {
+    if (format === "pdf") {
+      try {
+        const response = await fetch("/api/export-pdf", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages: [
+              {
+                role: messageRole,
+                parts: [{ type: "text", text: messageText }],
+              },
+            ],
+            aiOnly: true, // Para mensagens individuais, não mostrar o label de papel
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Erro ao gerar PDF");
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `mensagem-${Date.now()}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error("Erro ao exportar PDF:", error);
+        alert("Erro ao exportar PDF. Tente novamente.");
+      }
+      return;
+    }
+
     let content = "";
     let fileExtension = "";
     let mimeType = "";
@@ -606,54 +677,46 @@ const ChatBotDemo = () => {
                 </Context>
               )}
               {messages.length > 0 && (
-                <div className="relative">
+                <DropdownMenu>
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button
-                          onClick={() => setShowExportMenu(!showExportMenu)}
-                          className="p-2 hover:bg-accent rounded-lg transition-colors"
-                        >
-                          <DownloadIcon className="h-5 w-5" />
-                        </button>
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-2 hover:bg-accent rounded-lg transition-colors">
+                            <DownloadIcon className="h-5 w-5" />
+                          </button>
+                        </DropdownMenuTrigger>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Exportar conversa</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  {showExportMenu && (
-                    <div className="absolute right-0 top-12 bg-background border rounded-lg shadow-lg p-3 z-50 min-w-[200px]">
-                      <div className="mb-2 pb-2 border-b">
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <Checkbox
-                            checked={exportOnlyAI}
-                            onCheckedChange={(checked) => setExportOnlyAI(checked === true)}
-                          />
-                          <span>Apenas respostas da IA</span>
-                        </label>
-                      </div>
-                      <button
-                        onClick={() => {
-                          handleExportConversation("txt", exportOnlyAI);
-                          setShowExportMenu(false);
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-accent rounded text-sm"
-                      >
-                        Texto (.txt)
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleExportConversation("markdown", exportOnlyAI);
-                          setShowExportMenu(false);
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-accent rounded text-sm"
-                      >
-                        Markdown (.md)
-                      </button>
-                    </div>
-                  )}
-                </div>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>Exportar conversa</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuCheckboxItem
+                      checked={exportOnlyAI}
+                      onCheckedChange={(checked) => setExportOnlyAI(checked)}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      Apenas respostas da IA
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => handleExportConversation("txt", exportOnlyAI)}>
+                      <FileTextIcon className="mr-2 h-4 w-4" />
+                      <span>Texto (.txt)</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExportConversation("markdown", exportOnlyAI)}>
+                      <FileIcon className="mr-2 h-4 w-4" />
+                      <span>Markdown (.md)</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExportConversation("pdf", exportOnlyAI)}>
+                      <FileIcon className="mr-2 h-4 w-4" />
+                      <span>PDF (.pdf)</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </div>
           </div>
@@ -920,57 +983,38 @@ const ChatBotDemo = () => {
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
-                                  <div className="relative">
+                                  <DropdownMenu>
                                     <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <Action
-                                            onClick={() =>
-                                              setExportingMessageId(
-                                                exportingMessageId === message.id
-                                                  ? null
-                                                  : message.id
-                                              )
-                                            }
-                                            label="Export"
-                                          >
-                                            <DownloadIcon className="size-3" />
-                                          </Action>
+                                          <DropdownMenuTrigger asChild>
+                                            <Action label="Export">
+                                              <DownloadIcon className="size-3" />
+                                            </Action>
+                                          </DropdownMenuTrigger>
                                         </TooltipTrigger>
                                         <TooltipContent>
                                           <p>Exportar mensagem</p>
                                         </TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>
-                                    {exportingMessageId === message.id && (
-                                      <div className="absolute left-0 top-8 bg-background border rounded-lg shadow-lg p-2 z-50 min-w-[140px]">
-                                        <button
-                                          onClick={() => {
-                                            handleExportSingleMessage(
-                                              part.text,
-                                              "txt"
-                                            );
-                                            setExportingMessageId(null);
-                                          }}
-                                          className="w-full text-left px-3 py-2 hover:bg-accent rounded text-sm"
-                                        >
-                                          Texto (.txt)
-                                        </button>
-                                        <button
-                                          onClick={() => {
-                                            handleExportSingleMessage(
-                                              part.text,
-                                              "markdown"
-                                            );
-                                            setExportingMessageId(null);
-                                          }}
-                                          className="w-full text-left px-3 py-2 hover:bg-accent rounded text-sm"
-                                        >
-                                          Markdown (.md)
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
+                                    <DropdownMenuContent align="start" className="w-48">
+                                      <DropdownMenuLabel>Exportar mensagem</DropdownMenuLabel>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem onClick={() => handleExportSingleMessage(part.text, "txt", message.role as "user" | "assistant")}>
+                                        <FileTextIcon className="mr-2 h-4 w-4" />
+                                        <span>Texto (.txt)</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleExportSingleMessage(part.text, "markdown", message.role as "user" | "assistant")}>
+                                        <FileIcon className="mr-2 h-4 w-4" />
+                                        <span>Markdown (.md)</span>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleExportSingleMessage(part.text, "pdf", message.role as "user" | "assistant")}>
+                                        <FileIcon className="mr-2 h-4 w-4" />
+                                        <span>PDF (.pdf)</span>
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </Actions>
                               )}
                           </Fragment>
