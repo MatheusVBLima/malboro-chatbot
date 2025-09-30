@@ -126,6 +126,16 @@ import { StarsBackground } from "@/components/ui/stars-background";
 import { ImageSkeleton } from "@/components/ui/image-skeleton";
 import { ShootingStars } from "@/components/ui/shooting-stars";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const models = [
   {
@@ -213,6 +223,14 @@ const ChatBotDemo = () => {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [totalTokens, setTotalTokens] = useState({ input: 0, output: 0 });
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportFileName, setExportFileName] = useState("");
+  const [pendingExport, setPendingExport] = useState<{
+    format: "markdown" | "txt" | "pdf";
+    aiOnly?: boolean;
+    messageText?: string;
+    messageRole?: "user" | "assistant";
+  } | null>(null);
   const { messages, sendMessage, status, regenerate, stop, setMessages } =
     useChat();
 
@@ -356,6 +374,18 @@ const ChatBotDemo = () => {
     format: "markdown" | "txt" | "pdf",
     aiOnly: boolean = false
   ) => {
+    // Abrir dialog para capturar nome do arquivo
+    setPendingExport({ format, aiOnly });
+    setExportFileName("");
+    setShowExportDialog(true);
+  };
+
+  const executeExportConversation = async () => {
+    if (!pendingExport) return;
+
+    const { format, aiOnly = false } = pendingExport;
+    const fileName = exportFileName.trim() || `conversa-${Date.now()}`;
+
     if (format === "pdf") {
       try {
         const response = await fetch("/api/export-pdf", {
@@ -366,6 +396,7 @@ const ChatBotDemo = () => {
           body: JSON.stringify({
             messages,
             aiOnly,
+            title: fileName,
           }),
         });
 
@@ -377,13 +408,15 @@ const ChatBotDemo = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `conversa-${Date.now()}.pdf`;
+        a.download = `${fileName}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
       } catch (error) {
         console.error("Erro ao exportar PDF:", error);
         alert("Erro ao exportar PDF. Tente novamente.");
       }
+      setShowExportDialog(false);
+      setPendingExport(null);
       return;
     }
 
@@ -433,9 +466,11 @@ const ChatBotDemo = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `conversa-${Date.now()}.${fileExtension}`;
+    a.download = `${fileName}.${fileExtension}`;
     a.click();
     URL.revokeObjectURL(url);
+    setShowExportDialog(false);
+    setPendingExport(null);
   };
 
   const handleExportSingleMessage = async (
@@ -443,6 +478,18 @@ const ChatBotDemo = () => {
     format: "markdown" | "txt" | "pdf",
     messageRole: "user" | "assistant"
   ) => {
+    // Abrir dialog para capturar nome do arquivo
+    setPendingExport({ format, messageText, messageRole });
+    setExportFileName("");
+    setShowExportDialog(true);
+  };
+
+  const executeExportSingleMessage = async () => {
+    if (!pendingExport || !pendingExport.messageText || !pendingExport.messageRole) return;
+
+    const { format, messageText, messageRole } = pendingExport;
+    const fileName = exportFileName.trim() || `mensagem-${Date.now()}`;
+
     if (format === "pdf") {
       try {
         const response = await fetch("/api/export-pdf", {
@@ -458,6 +505,7 @@ const ChatBotDemo = () => {
               },
             ],
             aiOnly: true, // Para mensagens individuais, não mostrar o label de papel
+            title: fileName,
           }),
         });
 
@@ -469,13 +517,15 @@ const ChatBotDemo = () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `mensagem-${Date.now()}.pdf`;
+        a.download = `${fileName}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
       } catch (error) {
         console.error("Erro ao exportar PDF:", error);
         alert("Erro ao exportar PDF. Tente novamente.");
       }
+      setShowExportDialog(false);
+      setPendingExport(null);
       return;
     }
 
@@ -502,13 +552,23 @@ const ChatBotDemo = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `mensagem-${Date.now()}.${fileExtension}`;
+    a.download = `${fileName}.${fileExtension}`;
     a.click();
     URL.revokeObjectURL(url);
+    setShowExportDialog(false);
+    setPendingExport(null);
   };
 
   const handleSuggestionClick = (suggestion: string) => {
     setInput(suggestion);
+  };
+
+  const handleConfirmExport = () => {
+    if (pendingExport?.messageText) {
+      executeExportSingleMessage();
+    } else {
+      executeExportConversation();
+    }
   };
 
   const handleEditMessage = (messageId: string, currentText: string) => {
@@ -1336,6 +1396,50 @@ const ChatBotDemo = () => {
           </PromptInput>
         </div>
       </div>
+
+      {/* Dialog para nome do arquivo */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nome do arquivo</DialogTitle>
+            <DialogDescription>
+              Digite o nome para o arquivo {pendingExport?.format?.toUpperCase() || ""}.
+              A extensão será adicionada automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="filename">Nome do arquivo</Label>
+              <Input
+                id="filename"
+                value={exportFileName}
+                onChange={(e) => setExportFileName(e.target.value)}
+                placeholder={`${pendingExport?.messageText ? 'mensagem' : 'conversa'}-${Date.now()}`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleConfirmExport();
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <button
+              onClick={() => setShowExportDialog(false)}
+              className="px-4 py-2 border rounded-lg hover:bg-accent transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleConfirmExport}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Exportar
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

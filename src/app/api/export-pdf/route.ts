@@ -81,14 +81,14 @@ function removeMarkdownFormatting(text: string): string {
 }
 
 // Função para criar o documento PDF usando React.createElement
-function createConversationPDF(messages: any[], aiOnly: boolean) {
+function createConversationPDF(messages: any[], aiOnly: boolean, title?: string) {
   return React.createElement(
     Document,
     null,
     React.createElement(
       Page,
       { size: "A4", style: styles.page },
-      React.createElement(Text, { style: styles.title }, "Malboro ChatBot"),
+      React.createElement(Text, { style: styles.title }, title || "Malboro ChatBot"),
       ...messages.map((msg, index) => {
         const cleanText = removeMarkdownFormatting(msg.text);
         const showRole = !aiOnly || msg.role === "user";
@@ -138,7 +138,7 @@ function createConversationPDF(messages: any[], aiOnly: boolean) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { messages, aiOnly = false } = body;
+    const { messages, aiOnly = false, title } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Gerar o PDF
-    const pdfDoc = createConversationPDF(processedMessages, aiOnly);
+    const pdfDoc = createConversationPDF(processedMessages, aiOnly, title);
     const pdfStream = await pdf(pdfDoc).toBlob();
 
     // Retornar o PDF
