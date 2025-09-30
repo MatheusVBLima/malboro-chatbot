@@ -179,6 +179,12 @@ const suggestionPrompts = [
   "Como funciona o machine learning?",
 ];
 
+const suggestionPromptsMobile = [
+  "Explique como funciona a computação quântica",
+  "Qual a diferença entre React e Vue?",
+  "Como funciona o machine learning?",
+];
+
 // Tipos para histórico de conversas
 type ConversationMetadata = {
   id: string;
@@ -775,15 +781,30 @@ const ChatBotDemo = () => {
                     </p>
                   </div>
                   <div className="w-full max-w-3xl">
-                    <Suggestions>
-                      {suggestionPrompts.map((prompt, i) => (
-                        <Suggestion
-                          key={i}
-                          suggestion={prompt}
-                          onClick={handleSuggestionClick}
-                        />
-                      ))}
-                    </Suggestions>
+                    {/* Mobile: 3 suggestions */}
+                    <div className="sm:hidden">
+                      <Suggestions>
+                        {suggestionPromptsMobile.map((prompt, i) => (
+                          <Suggestion
+                            key={i}
+                            suggestion={prompt}
+                            onClick={handleSuggestionClick}
+                          />
+                        ))}
+                      </Suggestions>
+                    </div>
+                    {/* Desktop: 6 suggestions */}
+                    <div className="hidden sm:block">
+                      <Suggestions>
+                        {suggestionPrompts.map((prompt, i) => (
+                          <Suggestion
+                            key={i}
+                            suggestion={prompt}
+                            onClick={handleSuggestionClick}
+                          />
+                        ))}
+                      </Suggestions>
+                    </div>
                   </div>
                 </div>
               )}
