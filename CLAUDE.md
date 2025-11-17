@@ -80,6 +80,12 @@ Configured in `src/app/page.tsx`:
 
 - **AI Elements** (`src/components/ai-elements/`): Specialized components for chat UI (message, response, reasoning, sources, tool, etc.)
 - **Base UI** (`src/components/ui/`): shadcn/ui components with Tailwind CSS v4
+- **Markdown Rendering** (`src/components/markdown/streamdown.tsx`): Enhanced Streamdown wrapper with advanced configuration
+  - Uses Streamdown for markdown rendering with streaming support
+  - Automatic dark mode detection
+  - Security configurations (allowed link/image prefixes)
+  - Shiki syntax highlighting with theme switching
+  - Optimized for incomplete markdown parsing during streaming
 - Uses Radix UI primitives for accessible components
 - Includes animated background with stars and shooting stars
 
@@ -118,3 +124,58 @@ Approximate token calculation: 1 token ≈ 4 characters (implemented in `src/app
 - Uses Next.js 15 App Router with React Server Components
 - Tailwind CSS v4 with @tailwindcss/postcss
 - shadcn CLI tool available via `npx shadcn@latest add`
+
+## Markdown Rendering with Streamdown
+
+The project uses **Streamdown** for markdown rendering with advanced features:
+
+### Component Architecture
+
+- **`MarkdownRenderer`** (`src/components/markdown/streamdown.tsx`): Enhanced wrapper component
+  - Configures Streamdown with security, theming, and streaming optimizations
+  - Automatically detects dark mode via `.dark` class on `document.documentElement`
+  - Provides sensible defaults for link/image prefixes, incomplete markdown parsing
+
+- **`Response`** (`src/components/ai-elements/response.tsx`): Chat message renderer
+  - Uses `MarkdownRenderer` internally
+  - Optimized for streaming responses with `parseIncompleteMarkdown=true`
+  - Used in both regular messages and reasoning content
+
+### Key Features
+
+1. **Streaming Support**: `parseIncompleteMarkdown` enabled by default to handle partial markdown during token streaming
+2. **Security**: Configurable `allowedLinkPrefixes` and `allowedImagePrefixes` (defaults: `["https://", "http://"]` for links, plus `["data:"]` for images)
+3. **Syntax Highlighting**: Uses Shiki with automatic theme switching (`github-light` / `github-dark`)
+4. **Dark Mode**: Automatically detects and switches themes based on `.dark` class
+5. **Styling**: Comprehensive Tailwind CSS classes for all markdown elements (tables, code blocks, lists, etc.)
+
+### Usage
+
+```tsx
+import { Response } from "@/components/ai-elements/response";
+
+// Basic usage (uses all defaults)
+<Response>{markdownContent}</Response>
+
+// Custom configuration
+import { MarkdownRenderer } from "@/components/markdown/streamdown";
+
+<MarkdownRenderer
+  allowedLinkPrefixes={["https://"]} // Only HTTPS
+  lightTheme="github-light"
+  darkTheme="github-dark"
+  parseIncompleteMarkdown={true}
+>
+  {markdownContent}
+</MarkdownRenderer>
+```
+
+### Dependencies
+
+Streamdown includes these plugins automatically:
+- `remark-gfm` - GitHub Flavored Markdown support
+- `remark-math` - Math equation support
+- `rehype-katex` - Math rendering
+- `shiki` - Syntax highlighting
+
+All dependencies are bundled with `streamdown@^1.3.0` and don't need separate installation.

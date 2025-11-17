@@ -1,20 +1,17 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { MarkdownRenderer } from "@/components/markdown/streamdown";
 import { type ComponentProps, memo } from "react";
-import { Streamdown } from "streamdown";
 
-type ResponseProps = ComponentProps<typeof Streamdown>;
+type ResponseProps = ComponentProps<typeof MarkdownRenderer>;
 
+/**
+ * Componente Response otimizado para renderização de markdown em mensagens de chat.
+ * Usa Streamdown com configurações avançadas para streaming, segurança e dark mode.
+ */
 export const Response = memo(
-  ({ className, ...props }: ResponseProps) => (
-    <Streamdown
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        className
-      )}
-      {...props}
-    />
+  (props: ResponseProps) => (
+    <MarkdownRenderer {...props} />
   ),
   (prevProps, nextProps) => prevProps.children === nextProps.children
 );
