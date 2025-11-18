@@ -205,7 +205,7 @@ type ConversationMetadata = {
 
 const ChatBotDemo = () => {
   const [input, setInput] = useState("");
-  const [model, setModel] = useState<string>(models[0].value);
+  const [model, setModel] = useState<string>(models[1].value);
   const [webSearch, setWebSearch] = useState(false);
   const [imageGeneration, setImageGeneration] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -679,7 +679,7 @@ const ChatBotDemo = () => {
     <>
       <StarsBackground className="fixed inset-0 z-0" />
       <ShootingStars className="fixed inset-0 z-0" />
-      <div className="max-w-4xl mx-auto p-6 relative size-full h-screen">
+      <div className="max-w-7xl mx-auto p-6 relative size-full h-screen">
         <div className="flex flex-col h-full relative z-10">
           {/* Header com botões de ação */}
           <div className="flex items-center justify-between mb-4 gap-2">
