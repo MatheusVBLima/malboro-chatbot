@@ -15,7 +15,8 @@
       "mcp__shadcn__get_add_command_for_items",
       "Bash(npx shadcn@latest add @shadcn/checkbox)",
       "WebFetch(domain:medium.com)",
-      "Bash(npx:*)"
+      "Bash(npx:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

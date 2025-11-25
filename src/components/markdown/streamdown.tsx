@@ -21,26 +21,6 @@ type MarkdownRendererProps = ComponentProps<typeof Streamdown> & {
    * @default "github-dark"
    */
   darkTheme?: BundledTheme;
-  /**
-   * Prefixos de links permitidos para segurança
-   * @default ["https://", "http://"]
-   */
-  allowedLinkPrefixes?: string[];
-  /**
-   * Prefixos de imagens permitidos para segurança
-   * @default ["https://", "http://", "data:"]
-   */
-  allowedImagePrefixes?: string[];
-  /**
-   * Se deve parsear markdown incompleto (útil para streaming)
-   * @default true
-   */
-  parseIncompleteMarkdown?: boolean;
-  /**
-   * Origem padrão para links relativos
-   * @default window.location.origin (detectado automaticamente)
-   */
-  defaultOrigin?: string;
 };
 
 /**
@@ -53,27 +33,10 @@ export const MarkdownRenderer = memo(
     autoDetectTheme = true,
     lightTheme = "github-light",
     darkTheme = "github-dark",
-    allowedLinkPrefixes = ["https://", "http://"],
-    allowedImagePrefixes = ["https://", "http://", "data:"],
     parseIncompleteMarkdown = true,
-    defaultOrigin,
     ...props
   }: MarkdownRendererProps) => {
     const [isDark, setIsDark] = useState(false);
-    const [origin, setOrigin] = useState<string | undefined>(defaultOrigin);
-
-    // Detecta a origem padrão se não fornecida
-    useEffect(() => {
-      if (defaultOrigin) {
-        setOrigin(defaultOrigin);
-        return;
-      }
-
-      // Detecta automaticamente a origem do navegador
-      if (typeof window !== "undefined") {
-        setOrigin(window.location.origin);
-      }
-    }, [defaultOrigin]);
 
     // Detecta o tema dark automaticamente
     useEffect(() => {
@@ -98,10 +61,6 @@ export const MarkdownRenderer = memo(
 
     // Determina o tema Shiki - deve ser um array [light, dark]
     const shikiTheme: [BundledTheme, BundledTheme] = [lightTheme, darkTheme];
-
-    // Garante que temos uma origem válida antes de renderizar
-    // Se não tiver origem ainda, usa um valor padrão temporário
-    const effectiveOrigin = origin || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
 
     return (
       <Streamdown
@@ -130,9 +89,6 @@ export const MarkdownRenderer = memo(
           className
         )}
         parseIncompleteMarkdown={parseIncompleteMarkdown}
-        allowedLinkPrefixes={allowedLinkPrefixes}
-        allowedImagePrefixes={allowedImagePrefixes}
-        defaultOrigin={effectiveOrigin}
         shikiTheme={shikiTheme}
         {...props}
       />
