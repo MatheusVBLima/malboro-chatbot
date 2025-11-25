@@ -1,10 +1,10 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { MarkdownRenderer } from "@/components/markdown/streamdown";
 import { type ComponentProps, memo } from "react";
 import { Streamdown, type MermaidErrorComponentProps } from "streamdown";
 
-type ResponseProps = ComponentProps<typeof Streamdown>;
+type ResponseProps = ComponentProps<typeof MarkdownRenderer>;
 
 // Componente de erro customizado para Mermaid que mostra loading durante streaming
 const MermaidErrorHandler = ({ error, chart }: MermaidErrorComponentProps) => {
