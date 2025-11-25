@@ -1,8 +1,10 @@
 "use client";
 
 import { MarkdownRenderer } from "@/components/markdown/streamdown";
+import { cn } from "@/lib/utils";
 import { type ComponentProps, memo } from "react";
 import { Streamdown, type MermaidErrorComponentProps } from "streamdown";
+
 
 type ResponseProps = ComponentProps<typeof MarkdownRenderer>;
 
@@ -22,7 +24,6 @@ const MermaidErrorHandler = ({ error, chart }: MermaidErrorComponentProps) => {
     );
   }
 
-  // Para outros erros, mostra a mensagem normal
   return (
     <div className="rounded-lg border border-red-200 bg-red-50 p-4">
       <p className="text-sm text-red-600">{error}</p>
