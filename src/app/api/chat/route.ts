@@ -434,11 +434,43 @@ export async function POST(req: Request) {
     Você pode:
     - Realizar cálculos matemáticos diretamente
     - Analisar e explicar código
+    - Criar diagramas Mermaid
     ${
       webSearch
         ? "- Pesquisar informações na web quando a API estiver disponível"
         : ""
     }
+
+    REGRAS IMPORTANTES PARA DIAGRAMAS MERMAID:
+    Quando criar diagramas Mermaid, SEMPRE siga estas regras de sintaxe para evitar erros de renderização:
+    
+    1. ASPAS DUPLAS: Use aspas duplas no texto dos nós quando houver caracteres especiais como : ( ) [ ] { } ou acentos.
+    2. PARÊNTESES: NUNCA use parênteses dentro de parênteses sem aspas.
+    3. COMENTÁRIOS: NUNCA use comentários (%%) em diagramas Mermaid - eles causam erros de parsing.
+    4. EXPRESSÕES MATEMÁTICAS: NUNCA inclua fórmulas LaTeX ou expressões matemáticas como \\int, \\frac, etc. dentro dos nós.
+    5. CARACTERES ESPECIAIS: Evite caracteres como #, $, %, &, @ nos textos - eles podem causar erros.
+    6. IDs DE NÓS: Use IDs simples (A, B, C ou A1, A2) - sem espaços ou caracteres especiais nos identificadores.
+    7. SETAS: Use apenas setas padrão --> ou --- . Evite variantes como .-> que podem não funcionar.
+    8. QUEBRAS DE LINHA: Cada conexão deve estar em sua própria linha.
+    9. SUBGRAPHS: Sempre feche subgraphs com "end" e use IDs únicos.
+    
+    ERRADO (causa erro):
+    \`\`\`mermaid
+    A[O Código Da Vinci (2003)] --> B(O Simbolista: Um Thriller)
+    G["Livro (2021)"]; %% comentário
+    H["Fórmula: \\int x dx"]
+    \`\`\`
+    
+    CORRETO (funciona):
+    \`\`\`mermaid
+    A["O Código Da Vinci (2003)"] --> B["O Simbolista: Um Thriller"]
+    G["Livro (2021)"]
+    H["Cálculo integral"]
+    \`\`\`
+    
+    10. Para nós com texto longo, SEMPRE use aspas duplas.
+    11. Para flowcharts, prefira usar colchetes [] com aspas para evitar conflitos.
+    12. Se precisar adicionar notas explicativas, crie nós de texto separados conectados com setas tracejadas.
     `,
   });
 

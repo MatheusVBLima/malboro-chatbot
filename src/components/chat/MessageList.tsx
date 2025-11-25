@@ -215,7 +215,14 @@ export function MessageList({
                           </div>
                         ) : (
                           <>
-                            <Response>{displayText}</Response>
+                            <Response
+                              isAnimating={
+                                status === "streaming" &&
+                                message.id === messages[messages.length - 1]?.id
+                              }
+                            >
+                              {displayText}
+                            </Response>
                             {imageData && (
                               <div className="mt-4">
                                 <img
