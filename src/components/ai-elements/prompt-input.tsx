@@ -21,6 +21,7 @@ import type { ChatStatus, FileUIPart } from "ai";
 // Tipo estendido para incluir estado de upload
 type FileUIPartWithUpload = FileUIPart & {
   id: string;
+  serverId?: string; // ID retornado pelo servidor após upload
   uploading?: boolean;
   uploadError?: boolean;
 };
@@ -329,16 +330,26 @@ export const PromptInput = ({
               setItems((currentItems) =>
                 currentItems.map((item) => {
                   if (item.id === tempId) {
-                    // Revogar a blob URL antiga
-                    URL.revokeObjectURL(blobUrl);
-                    // Atualizar com a URL pública (Blob ou fallback)
+                    // Determinar a URL final ANTES de revogar a antiga
                     const finalUrl = result.url ?? blobUrl;
                     const uploadedUrl = result.blobUrl ?? result.url ?? blobUrl;
                     const fallbackUrl =
                       result.fallbackUrl ?? result.url ?? blobUrl;
+                    
+                    // Só revogar a blob URL se temos uma URL diferente para usar
+                    // e não vamos usar a blob URL como fallback
+                    if (result.url && result.url !== blobUrl) {
+                      // Aguardar um frame para garantir que o DOM atualizou
+                      requestAnimationFrame(() => {
+                        URL.revokeObjectURL(blobUrl);
+                      });
+                    }
+                    
                     return {
                       ...item,
-                      id: result.id,
+                      // Manter o id original para não causar re-mount do React
+                      // Armazenar o ID do servidor em serverId
+                      serverId: result.id,
                       url: finalUrl,
                       uploadedUrl,
                       storage: result.storage,
@@ -464,8 +475,10 @@ export const PromptInput = ({
   const handleSubmit: FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
 
-    const files: FileUIPart[] = items.map(({ ...item }) => ({
+    // Usar serverId quando disponível para a API
+    const files: FileUIPart[] = items.map(({ serverId, ...item }) => ({
       ...item,
+      id: serverId ?? item.id, // Usar o ID do servidor se disponível
     }));
 
     onSubmit({ text: event.currentTarget.message.value, files }, event);
@@ -473,7 +486,8 @@ export const PromptInput = ({
 
   const ctx = useMemo<AttachmentsContext>(
     () => ({
-      files: items.map((item) => ({ ...item, id: item.id })),
+      // Manter o id original para a key do React, mas incluir serverId para referência
+      files: items.map((item) => ({ ...item })),
       add,
       remove,
       clear,
