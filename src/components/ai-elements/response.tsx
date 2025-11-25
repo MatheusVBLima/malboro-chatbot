@@ -1,8 +1,10 @@
 "use client";
 
 import { MarkdownRenderer } from "@/components/markdown/streamdown";
+import { cn } from "@/lib/utils";
 import { type ComponentProps, memo } from "react";
 import { Streamdown, type MermaidErrorComponentProps } from "streamdown";
+
 
 type ResponseProps = ComponentProps<typeof MarkdownRenderer>;
 
