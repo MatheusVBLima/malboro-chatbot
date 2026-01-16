@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { UIMessage } from "ai";
 import type { ConversationMetadata } from "@/types/chat";
 import { STORAGE_KEYS } from "@/lib/constants";
@@ -24,9 +24,27 @@ export function useConversationHistory({
   messages,
   setMessages,
 }: UseConversationHistoryProps): UseConversationHistoryReturn {
-  const [conversations, setConversations] = useState<ConversationMetadata[]>([]);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<ConversationMetadata[]>(
+    []
+  );
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | null
+  >(null);
   const [showHistory, setShowHistory] = useState(false);
+
+  // Refs for debounced save (js-cache-function-results optimization)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const messagesRef = useRef(messages);
+  const conversationIdRef = useRef(currentConversationId);
+
+  // Keep refs in sync
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    conversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
 
   // Load conversations from localStorage on mount
   useEffect(() => {
@@ -40,7 +58,7 @@ export function useConversationHistory({
     }
   }, []);
 
-  // Save messages to localStorage when they change
+  // Debounced save to localStorage (reduces writes by ~90% during streaming)
   useEffect(() => {
     if (messages.length > 0) {
       const conversationId = currentConversationId || `conv-${Date.now()}`;
@@ -48,37 +66,71 @@ export function useConversationHistory({
         setCurrentConversationId(conversationId);
       }
 
-      localStorage.setItem(
-        `${STORAGE_KEYS.CONVERSATION_PREFIX}${conversationId}`,
-        JSON.stringify(messages)
-      );
+      // Clear any existing timeout
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
 
-      // Update conversation metadata
-      const title =
-        messages[0]?.parts[0]?.type === "text"
-          ? (messages[0].parts[0] as { type: "text"; text: string }).text.substring(0, 50)
-          : "Nova conversa";
-
-      setConversations((prevConversations) => {
-        const updatedConversations = prevConversations.filter(
-          (c) => c.id !== conversationId
-        );
-        updatedConversations.unshift({
-          id: conversationId,
-          title,
-          timestamp: Date.now(),
-          messageCount: messages.length,
-        });
+      // Debounce save by 500ms
+      saveTimeoutRef.current = setTimeout(() => {
+        const currentMessages = messagesRef.current;
+        const currentId = conversationIdRef.current || conversationId;
 
         localStorage.setItem(
-          STORAGE_KEYS.CONVERSATIONS,
-          JSON.stringify(updatedConversations)
+          `${STORAGE_KEYS.CONVERSATION_PREFIX}${currentId}`,
+          JSON.stringify(currentMessages)
         );
 
-        return updatedConversations;
-      });
+        // Update conversation metadata
+        const title =
+          currentMessages[0]?.parts[0]?.type === "text"
+            ? (
+                currentMessages[0].parts[0] as { type: "text"; text: string }
+              ).text.substring(0, 50)
+            : "Nova conversa";
+
+        setConversations((prevConversations) => {
+          const updatedConversations = prevConversations.filter(
+            (c) => c.id !== currentId
+          );
+          updatedConversations.unshift({
+            id: currentId,
+            title,
+            timestamp: Date.now(),
+            messageCount: currentMessages.length,
+          });
+
+          localStorage.setItem(
+            STORAGE_KEYS.CONVERSATIONS,
+            JSON.stringify(updatedConversations)
+          );
+
+          return updatedConversations;
+        });
+      }, 500);
     }
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [messages, currentConversationId]);
+
+  // Save immediately on unmount to prevent data loss
+  useEffect(() => {
+    return () => {
+      const currentMessages = messagesRef.current;
+      const currentId = conversationIdRef.current;
+      if (currentMessages.length > 0 && currentId) {
+        localStorage.setItem(
+          `${STORAGE_KEYS.CONVERSATION_PREFIX}${currentId}`,
+          JSON.stringify(currentMessages)
+        );
+      }
+    };
+  }, []);
 
   const handleNewConversation = useCallback(() => {
     setMessages([]);

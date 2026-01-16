@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { UIMessage } from "ai";
 import type { ChatStatus, ChatOptions } from "@/types/chat";
 
@@ -36,6 +36,13 @@ export function useMessageEdit({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
 
+  // Use ref to track editingText to avoid callback thrashing (rerender-dependencies optimization)
+  // This prevents handleSaveEdit from being recreated on every keystroke
+  const editingTextRef = useRef(editingText);
+  useEffect(() => {
+    editingTextRef.current = editingText;
+  }, [editingText]);
+
   const handleEditMessage = useCallback(
     (messageId: string, currentText: string) => {
       // Stop generation if in progress
@@ -51,6 +58,7 @@ export function useMessageEdit({
 
   const handleSaveEdit = useCallback(
     (messageId: string) => {
+      const currentEditingText = editingTextRef.current;
       const messageIndex = messages.findIndex((m) => m.id === messageId);
       if (messageIndex === -1) return;
 
@@ -64,7 +72,8 @@ export function useMessageEdit({
       const message = updatedMessages[messageIndex];
 
       if (message.parts[0]?.type === "text") {
-        (message.parts[0] as { type: "text"; text: string }).text = editingText;
+        (message.parts[0] as { type: "text"; text: string }).text =
+          currentEditingText;
       }
 
       // Remove all messages after the edited one
@@ -74,7 +83,7 @@ export function useMessageEdit({
       // Wait a moment before resending to ensure stop was processed
       setTimeout(() => {
         sendMessage(
-          { text: editingText },
+          { text: currentEditingText },
           {
             body: chatOptions,
           }
@@ -84,7 +93,7 @@ export function useMessageEdit({
       setEditingMessageId(null);
       setEditingText("");
     },
-    [messages, setMessages, status, stop, sendMessage, chatOptions, editingText]
+    [messages, setMessages, status, stop, sendMessage, chatOptions]
   );
 
   const handleCancelEdit = useCallback(() => {

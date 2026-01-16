@@ -16,7 +16,16 @@
       "Bash(npx shadcn@latest add @shadcn/checkbox)",
       "WebFetch(domain:medium.com)",
       "Bash(npx:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(bun dev)",
+      "Bash(timeout 5 tail:*)",
+      "Bash(node -e:*)",
+      "Bash(node --loader ts-node/esm:*)",
+      "Bash(timeout 2 tail:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "ask": []

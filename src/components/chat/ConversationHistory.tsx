@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { TrashIcon } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ConversationMetadata } from "@/types/chat";
@@ -10,7 +11,8 @@ type ConversationHistoryProps = {
   onDeleteConversation: (conversationId: string) => void;
 };
 
-export function ConversationHistory({
+// Memoized component to prevent re-renders when parent updates (rerender-memo optimization)
+export const ConversationHistory = memo(function ConversationHistory({
   conversations,
   onLoadConversation,
   onDeleteConversation,
@@ -55,5 +57,5 @@ export function ConversationHistory({
       </ScrollArea>
     </div>
   );
-}
+});
 

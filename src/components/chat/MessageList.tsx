@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useCallback } from "react";
+import { Fragment, useState, useCallback, useRef, useEffect } from "react";
 import type { UIMessage, ToolUIPart } from "ai";
 import { Message, MessageContent } from "@/components/ai-elements/message";
 import { Response } from "@/components/ai-elements/response";
@@ -28,7 +28,6 @@ import { ImageSkeleton } from "@/components/ui/image-skeleton";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
@@ -88,6 +87,17 @@ export function MessageList({
     new Set()
   );
 
+  // Track timeouts for cleanup on unmount (memory leak fix)
+  const timeoutRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // Cleanup all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach((timeout) => clearTimeout(timeout));
+      timeoutRefs.current.clear();
+    };
+  }, []);
+
   const handleCopy = useCallback(async (text: string, messageId: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -103,13 +113,23 @@ export function MessageList({
 
     setCopiedMessageIds((prev) => new Set(prev).add(messageId));
 
-    setTimeout(() => {
+    // Clear any existing timeout for this message
+    const existingTimeout = timeoutRefs.current.get(messageId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // Set new timeout with cleanup tracking
+    const timeout = setTimeout(() => {
       setCopiedMessageIds((prev) => {
         const newSet = new Set(prev);
         newSet.delete(messageId);
         return newSet;
       });
+      timeoutRefs.current.delete(messageId);
     }, 2000);
+
+    timeoutRefs.current.set(messageId, timeout);
   }, []);
 
   return (
@@ -246,67 +266,61 @@ export function MessageList({
                       i === message.parts.length - 1 &&
                       message.id === messages[messages.length - 1]?.id && (
                         <Actions className="mt-2">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Action onClick={onRegenerate} label="Retry">
-                                  <RefreshCcwIcon className="size-3" />
-                                </Action>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Regenerar resposta</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Action onClick={onRegenerate} label="Retry">
+                                <RefreshCcwIcon className="size-3" />
+                              </Action>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Regenerar resposta</p>
+                            </TooltipContent>
+                          </Tooltip>
 
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Action
-                                  onClick={() =>
-                                    handleCopy(
-                                      textPart.text,
-                                      `${message.id}-${i}`
-                                    )
-                                  }
-                                  label={
-                                    copiedMessageIds.has(`${message.id}-${i}`)
-                                      ? "Copied!"
-                                      : "Copy"
-                                  }
-                                >
-                                  {copiedMessageIds.has(`${message.id}-${i}`) ? (
-                                    <CheckIcon className="size-3" />
-                                  ) : (
-                                    <CopyIcon className="size-3" />
-                                  )}
-                                </Action>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>
-                                  {copiedMessageIds.has(`${message.id}-${i}`)
-                                    ? "Copiado!"
-                                    : "Copiar mensagem"}
-                                </p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Action
+                                onClick={() =>
+                                  handleCopy(
+                                    textPart.text,
+                                    `${message.id}-${i}`
+                                  )
+                                }
+                                label={
+                                  copiedMessageIds.has(`${message.id}-${i}`)
+                                    ? "Copied!"
+                                    : "Copy"
+                                }
+                              >
+                                {copiedMessageIds.has(`${message.id}-${i}`) ? (
+                                  <CheckIcon className="size-3" />
+                                ) : (
+                                  <CopyIcon className="size-3" />
+                                )}
+                              </Action>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                {copiedMessageIds.has(`${message.id}-${i}`)
+                                  ? "Copiado!"
+                                  : "Copiar mensagem"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
 
                           <DropdownMenu>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <DropdownMenuTrigger asChild>
-                                    <Action label="Export">
-                                      <DownloadIcon className="size-3" />
-                                    </Action>
-                                  </DropdownMenuTrigger>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Exportar mensagem</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <DropdownMenuTrigger asChild>
+                                  <Action label="Export">
+                                    <DownloadIcon className="size-3" />
+                                  </Action>
+                                </DropdownMenuTrigger>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Exportar mensagem</p>
+                              </TooltipContent>
+                            </Tooltip>
                             <DropdownMenuContent align="start" className="w-48">
                               <DropdownMenuLabel>
                                 Exportar mensagem

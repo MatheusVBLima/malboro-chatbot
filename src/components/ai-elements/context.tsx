@@ -18,6 +18,22 @@ const ICON_VIEWBOX = 24;
 const ICON_CENTER = 12;
 const ICON_STROKE_WIDTH = 2;
 
+// Memoized formatters at module level (js-cache-function-results optimization)
+// Prevents creating new Intl.NumberFormat instances on every render
+const formatters = {
+  percent: new Intl.NumberFormat("en-US", {
+    style: "percent",
+    maximumFractionDigits: 1,
+  }),
+  compact: new Intl.NumberFormat("en-US", {
+    notation: "compact",
+  }),
+  currency: new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }),
+};
+
 type ContextSchema = {
   usedTokens: number;
   maxTokens: number;
@@ -104,10 +120,7 @@ export type ContextTriggerProps = ComponentProps<typeof Button>;
 export const ContextTrigger = ({ children, ...props }: ContextTriggerProps) => {
   const { usedTokens, maxTokens } = useContextValue();
   const usedPercent = usedTokens / maxTokens;
-  const renderedPercent = new Intl.NumberFormat("en-US", {
-    style: "percent",
-    maximumFractionDigits: 1,
-  }).format(usedPercent);
+  const renderedPercent = formatters.percent.format(usedPercent);
 
   return (
     <HoverCardTrigger asChild>
@@ -144,16 +157,9 @@ export const ContextContentHeader = ({
 }: ContextContentHeader) => {
   const { usedTokens, maxTokens } = useContextValue();
   const usedPercent = usedTokens / maxTokens;
-  const displayPct = new Intl.NumberFormat("en-US", {
-    style: "percent",
-    maximumFractionDigits: 1,
-  }).format(usedPercent);
-  const used = new Intl.NumberFormat("en-US", {
-    notation: "compact",
-  }).format(usedTokens);
-  const total = new Intl.NumberFormat("en-US", {
-    notation: "compact",
-  }).format(maxTokens);
+  const displayPct = formatters.percent.format(usedPercent);
+  const used = formatters.compact.format(usedTokens);
+  const total = formatters.compact.format(maxTokens);
 
   return (
     <div className={cn("w-full space-y-2 p-3", className)} {...props}>
@@ -203,10 +209,7 @@ export const ContextContentFooter = ({
         },
       }).totalUSD
     : undefined;
-  const totalCost = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(costUSD ?? 0);
+  const totalCost = formatters.currency.format(costUSD ?? 0);
 
   return (
     <div
@@ -250,10 +253,7 @@ export const ContextInputUsage = ({
         usage: { input: inputTokens, output: 0 },
       }).totalUSD
     : undefined;
-  const inputCostText = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(inputCost ?? 0);
+  const inputCostText = formatters.currency.format(inputCost ?? 0);
 
   return (
     <div
@@ -290,10 +290,7 @@ export const ContextOutputUsage = ({
         usage: { input: 0, output: outputTokens },
       }).totalUSD
     : undefined;
-  const outputCostText = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(outputCost ?? 0);
+  const outputCostText = formatters.currency.format(outputCost ?? 0);
 
   return (
     <div
@@ -330,10 +327,7 @@ export const ContextReasoningUsage = ({
         usage: { reasoningTokens },
       }).totalUSD
     : undefined;
-  const reasoningCostText = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(reasoningCost ?? 0);
+  const reasoningCostText = formatters.currency.format(reasoningCost ?? 0);
 
   return (
     <div
@@ -370,10 +364,7 @@ export const ContextCacheUsage = ({
         usage: { cacheReads: cacheTokens, input: 0, output: 0 },
       }).totalUSD
     : undefined;
-  const cacheCostText = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(cacheCost ?? 0);
+  const cacheCostText = formatters.currency.format(cacheCost ?? 0);
 
   return (
     <div
@@ -394,11 +385,7 @@ const TokensWithCost = ({
   costText?: string;
 }) => (
   <span>
-    {tokens === undefined
-      ? "—"
-      : new Intl.NumberFormat("en-US", {
-          notation: "compact",
-        }).format(tokens)}
+    {tokens === undefined ? "—" : formatters.compact.format(tokens)}
     {costText ? (
       <span className="ml-2 text-muted-foreground">• {costText}</span>
     ) : null}

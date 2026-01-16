@@ -2,6 +2,22 @@ import type { ModelConfig } from "@/types/chat";
 
 export const MODELS: ModelConfig[] = [
   {
+    name: "Gemini 3 Flash",
+    value: "google/gemini-3-flash-preview",
+    description:
+      "Modelo mais recente da Google com performance superior ao 2.5 Pro, 3x mais rápido. 78% SWE-bench, 90.4% GPQA Diamond. Contexto de 1M tokens.",
+    capabilities: ["Texto", "Imagens", "Áudio", "Vídeo", "PDFs"],
+    speed: "Muito rápido",
+  },
+  {
+    name: "GLM-4.7",
+    value: "zhipu/glm-4.7",
+    description:
+      "Modelo open-source da Zhipu AI com 355B parâmetros, contexto de 200K tokens e excelente performance em código (73.8% SWE-bench).",
+    capabilities: ["Texto", "Código", "Raciocínio"],
+    speed: "Rápido",
+  },
+  {
     name: "Gemini 2.5 Pro",
     value: "google/gemini-2.5-pro",
     description:
@@ -43,7 +59,7 @@ export const MODELS: ModelConfig[] = [
   },
 ];
 
-export const DEFAULT_MODEL = MODELS[1].value;
+export const DEFAULT_MODEL = MODELS[0].value;
 
 export const SUGGESTION_PROMPTS = [
   "Explique como funciona a computação quântica",

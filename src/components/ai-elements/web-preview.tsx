@@ -10,13 +10,12 @@ import { Input } from "@/components/ui/input";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { ChevronDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useMemo, useCallback } from "react";
 
 export type WebPreviewContextValue = {
   url: string;
@@ -50,17 +49,24 @@ export const WebPreview = ({
   const [url, setUrl] = useState(defaultUrl);
   const [consoleOpen, setConsoleOpen] = useState(false);
 
-  const handleUrlChange = (newUrl: string) => {
-    setUrl(newUrl);
-    onUrlChange?.(newUrl);
-  };
+  const handleUrlChange = useCallback(
+    (newUrl: string) => {
+      setUrl(newUrl);
+      onUrlChange?.(newUrl);
+    },
+    [onUrlChange]
+  );
 
-  const contextValue: WebPreviewContextValue = {
-    url,
-    setUrl: handleUrlChange,
-    consoleOpen,
-    setConsoleOpen,
-  };
+  // Memoize context value to prevent unnecessary re-renders of consumers
+  const contextValue = useMemo<WebPreviewContextValue>(
+    () => ({
+      url,
+      setUrl: handleUrlChange,
+      consoleOpen,
+      setConsoleOpen,
+    }),
+    [url, handleUrlChange, consoleOpen]
+  );
 
   return (
     <WebPreviewContext.Provider value={contextValue}>
@@ -103,25 +109,23 @@ export const WebPreviewNavigationButton = ({
   children,
   ...props
 }: WebPreviewNavigationButtonProps) => (
-  <TooltipProvider>
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          className="h-8 w-8 p-0 hover:text-foreground"
-          disabled={disabled}
-          onClick={onClick}
-          size="sm"
-          variant="ghost"
-          {...props}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>{tooltip}</p>
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button
+        className="h-8 w-8 p-0 hover:text-foreground"
+        disabled={disabled}
+        onClick={onClick}
+        size="sm"
+        variant="ghost"
+        {...props}
+      >
+        {children}
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>{tooltip}</p>
+    </TooltipContent>
+  </Tooltip>
 );
 
 export type WebPreviewUrlProps = ComponentProps<typeof Input>;

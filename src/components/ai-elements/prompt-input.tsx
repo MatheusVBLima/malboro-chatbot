@@ -24,6 +24,12 @@ type FileUIPartWithUpload = FileUIPart & {
   serverId?: string; // ID retornado pelo servidor após upload
   uploading?: boolean;
   uploadError?: boolean;
+  // URLs do servidor para evitar usar blob: URLs que não funcionam no backend
+  blobUrl?: string;
+  uploadedUrl?: string;
+  fallbackUrl?: string;
+  storage?: "memory" | "blob";
+  blobKey?: string;
 };
 import {
   ImageIcon,
@@ -475,10 +481,16 @@ export const PromptInput = ({
   const handleSubmit: FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
 
-    // Usar serverId quando disponível para a API
-    const files: FileUIPart[] = items.map(({ serverId, ...item }) => ({
+    // Usar serverId e URLs do servidor quando disponíveis para a API
+    // Prioridade: blobUrl > uploadedUrl > fallbackUrl > url (blob: URL é último recurso)
+    const files: FileUIPart[] = items.map(({ serverId, blobUrl, uploadedUrl, fallbackUrl, ...item }) => ({
       ...item,
       id: serverId ?? item.id, // Usar o ID do servidor se disponível
+      // Usar URL do servidor, nunca blob: URLs que não funcionam no backend
+      url: blobUrl || uploadedUrl || fallbackUrl || item.url,
+      blobUrl,
+      uploadedUrl,
+      fallbackUrl,
     }));
 
     onSubmit({ text: event.currentTarget.message.value, files }, event);

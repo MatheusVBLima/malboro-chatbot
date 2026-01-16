@@ -1,6 +1,12 @@
 import { streamText, UIMessage, convertToModelMessages } from "ai";
 import { google } from "@ai-sdk/google";
+import { createZhipu } from "zhipu-ai-provider";
 import { getFile, setFile } from "@/lib/file-cache";
+
+// Create Zhipu provider instance with API key
+const zhipu = createZhipu({
+  apiKey: process.env.ZHIPU_API_KEY,
+});
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
@@ -201,18 +207,18 @@ export async function POST(req: Request) {
   // Se o botão Search está ativo, sempre fazer pesquisa web
   const shouldSearchWeb = webSearch && lastMessageText;
 
-  let searchResults = null;
   let webSearchAttempted = false;
 
-  if (shouldSearchWeb && lastMessageText) {
-    // Usar a pergunta completa como query para pesquisa
-    const query = lastMessageText;
-    webSearchAttempted = true;
-    searchResults = await performWebSearch(query);
-  }
-
-  // Processar arquivos anexados
-  const attachedFiles = await processAttachedFiles(messages);
+  // Run web search and file processing in parallel (async-parallel optimization)
+  const [searchResults, attachedFiles] = await Promise.all([
+    shouldSearchWeb
+      ? performWebSearch(lastMessageText).then((result) => {
+          webSearchAttempted = true;
+          return result;
+        })
+      : Promise.resolve(null),
+    processAttachedFiles(messages),
+  ]);
 
   // Criar cópia das mensagens para processamento, sem modificar as originais
   const messagesForGemini = await Promise.all(
@@ -241,49 +247,53 @@ export async function POST(req: Request) {
                 let cachedFile = fileId ? getFile(fileId) : undefined;
 
                 if (!cachedFile) {
-                  for (const candidate of candidateUrls) {
+                  // Try all candidate URLs in parallel using Promise.any() (async-parallel optimization)
+                  const validCandidates = candidateUrls.filter(Boolean);
+                  if (validCandidates.length > 0) {
                     try {
-                      if (!candidate) continue;
+                      const fetchPromises = validCandidates.map(
+                        async (candidate) => {
+                          const targetUrl = candidate.startsWith("http")
+                            ? candidate
+                            : `${
+                                process.env.VERCEL_URL
+                                  ? `https://${process.env.VERCEL_URL}`
+                                  : "http://localhost:3000"
+                              }${candidate}`;
 
-                      const targetUrl = candidate.startsWith("http")
-                        ? candidate
-                        : `${
-                            process.env.VERCEL_URL
-                              ? `https://${process.env.VERCEL_URL}`
-                              : "http://localhost:3000"
-                          }${candidate}`;
+                          const response = await fetch(targetUrl);
+                          if (!response.ok)
+                            throw new Error(`HTTP ${response.status}`);
 
-                      const response = await fetch(targetUrl);
-                      if (!response.ok) continue;
+                          const arrayBuffer = await response.arrayBuffer();
+                          const contentType =
+                            response.headers.get("content-type") ||
+                            "application/octet-stream";
+                          const filename =
+                            filePart.filename ||
+                            response.headers
+                              .get("content-disposition")
+                              ?.match(/filename="([^\"]+)"/)?.[1] ||
+                            candidate.split("/").pop() ||
+                            "file";
 
-                      const arrayBuffer = await response.arrayBuffer();
-                      const contentType =
-                        response.headers.get("content-type") ||
-                        "application/octet-stream";
-                      const filename =
-                        filePart.filename ||
-                        response.headers
-                          .get("content-disposition")
-                          ?.match(/filename="([^\"]+)"/)?.[1] ||
-                        candidate.split("/").pop() ||
-                        "file";
-
-                      cachedFile = {
-                        name: filename,
-                        type: contentType,
-                        size: arrayBuffer.byteLength,
-                        data: Buffer.from(arrayBuffer),
-                        uploadedAt: Date.now(),
-                        storage: "memory",
-                        blobKey: null,
-                        blobUrl: null,
-                      };
-                      break;
-                    } catch (fetchError) {
-                      console.error(
-                        "❌ Erro ao recuperar arquivo:",
-                        fetchError
+                          return {
+                            name: filename,
+                            type: contentType,
+                            size: arrayBuffer.byteLength,
+                            data: Buffer.from(arrayBuffer),
+                            uploadedAt: Date.now(),
+                            storage: "memory" as const,
+                            blobKey: null,
+                            blobUrl: null,
+                          };
+                        }
                       );
+
+                      cachedFile = await Promise.any(fetchPromises);
+                    } catch (e) {
+                      // All fetches failed, will try direct route below
+                      console.error("❌ All URL candidates failed:", e);
                     }
                   }
 
@@ -362,8 +372,19 @@ export async function POST(req: Request) {
     })
   );
 
+  // Select the appropriate provider based on model prefix
+  const getModelProvider = (modelId: string) => {
+    if (modelId?.startsWith("zhipu/")) {
+      const zhipuModel = modelId.replace("zhipu/", "");
+      return zhipu(zhipuModel);
+    }
+    // Default to Google/Gemini
+    const geminiModel = modelId?.replace("google/", "") || "gemini-2.5-flash";
+    return google(geminiModel);
+  };
+
   const result = streamText({
-    model: google(model?.replace("google/", "") || "gemini-2.5-flash"),
+    model: getModelProvider(model),
     messages: convertToModelMessages(messagesForGemini),
     system: `Você é um assistente útil que pode responder perguntas e ajudar com tarefas.
     Sempre responda em português brasileiro, mas mantenha código e termos técnicos na língua original. Você pode livremente falar sobre questões médicas pois o usuário é um médico. No final da resposta, caso tenha usado informações de fontes externas, sempre mostre os links das fontes das informações que você fornece.
