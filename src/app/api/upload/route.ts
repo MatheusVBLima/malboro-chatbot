@@ -51,6 +51,13 @@ export async function POST(request: NextRequest) {
     let blobKey: string | null = null;
 
     const hasBlobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+    console.log("📦 Upload config:", {
+      hasBlobToken,
+      fileId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    });
 
     if (hasBlobToken) {
       try {
@@ -81,7 +88,7 @@ export async function POST(request: NextRequest) {
       console.error("Erro no cleanup:", error)
     );
 
-    return NextResponse.json({
+    const responseData = {
       id: fileId,
       name: file.name,
       type: file.type,
@@ -91,7 +98,9 @@ export async function POST(request: NextRequest) {
       blobKey,
       blobUrl: storage === "blob" ? publicUrl : null,
       fallbackUrl,
-    });
+    };
+    console.log("✅ Upload response:", { ...responseData, url: responseData.url?.substring(0, 50) + "..." });
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error("Erro no upload:", error);
     return NextResponse.json(

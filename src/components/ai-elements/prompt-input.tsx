@@ -99,11 +99,25 @@ export function PromptInputAttachment({
 
   return (
     <div
-      className={cn("group relative h-14 w-14 rounded-md border", className)}
+      className={cn(
+        "group relative h-14 w-14 rounded-md border",
+        data.uploadError && "border-red-500 bg-red-50 dark:bg-red-950",
+        data.uploading && "animate-pulse",
+        className
+      )}
       key={data.id}
+      title={data.uploadError ? "Falha no upload - clique no X para remover" : data.filename}
       {...props}
     >
-      {data.mediaType?.startsWith("image/") && data.url ? (
+      {data.uploading ? (
+        <div className="flex size-full items-center justify-center">
+          <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : data.uploadError ? (
+        <div className="flex size-full items-center justify-center text-red-500">
+          <XIcon className="size-4" />
+        </div>
+      ) : data.mediaType?.startsWith("image/") && data.url ? (
         <img
           alt={data.filename || "attachment"}
           className="size-full rounded-md object-cover"
@@ -118,7 +132,10 @@ export function PromptInputAttachment({
       )}
       <Button
         aria-label="Remove attachment"
-        className="-right-1.5 -top-1.5 absolute h-6 w-6 rounded-full opacity-0 group-hover:opacity-100"
+        className={cn(
+          "-right-1.5 -top-1.5 absolute h-6 w-6 rounded-full opacity-0 group-hover:opacity-100",
+          data.uploadError && "opacity-100 bg-red-500 hover:bg-red-600"
+        )}
         onClick={() => attachments.remove(data.id)}
         size="icon"
         type="button"
@@ -331,7 +348,13 @@ export const PromptInput = ({
             method: "POST",
             body: formData,
           })
-            .then((response) => response.json())
+            .then(async (response) => {
+              if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Upload failed: ${response.status} - ${text}`);
+              }
+              return response.json();
+            })
             .then((result) => {
               setItems((currentItems) =>
                 currentItems.map((item) => {
@@ -481,17 +504,47 @@ export const PromptInput = ({
   const handleSubmit: FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
 
+    // Verificar se há arquivos ainda fazendo upload
+    const stillUploading = items.some((item) => item.uploading);
+    if (stillUploading) {
+      onError?.({
+        code: "max_files",
+        message: "Aguarde o upload dos arquivos terminar.",
+      });
+      return;
+    }
+
+    // Verificar se há arquivos com erro de upload
+    const hasUploadError = items.some((item) => item.uploadError);
+    if (hasUploadError) {
+      onError?.({
+        code: "max_files",
+        message: "Alguns arquivos falharam no upload. Remova-os e tente novamente.",
+      });
+      return;
+    }
+
     // Usar serverId e URLs do servidor quando disponíveis para a API
-    // Prioridade: blobUrl > uploadedUrl > fallbackUrl > url (blob: URL é último recurso)
-    const files: FileUIPart[] = items.map(({ serverId, blobUrl, uploadedUrl, fallbackUrl, ...item }) => ({
-      ...item,
-      id: serverId ?? item.id, // Usar o ID do servidor se disponível
-      // Usar URL do servidor, nunca blob: URLs que não funcionam no backend
-      url: blobUrl || uploadedUrl || fallbackUrl || item.url,
-      blobUrl,
-      uploadedUrl,
-      fallbackUrl,
-    }));
+    // Prioridade: blobUrl > uploadedUrl > fallbackUrl
+    // NUNCA usar URLs blob: locais - elas não funcionam no servidor
+    const files: FileUIPart[] = items
+      .filter((item) => {
+        // Verificar se temos uma URL válida do servidor
+        const serverUrl = item.blobUrl || item.uploadedUrl || item.fallbackUrl;
+        if (!serverUrl || serverUrl.startsWith("blob:")) {
+          console.warn("Arquivo sem URL válida do servidor:", item.filename);
+          return false;
+        }
+        return true;
+      })
+      .map(({ serverId, blobUrl, uploadedUrl, fallbackUrl, ...item }) => ({
+        ...item,
+        id: serverId ?? item.id,
+        url: blobUrl || uploadedUrl || fallbackUrl || "",
+        blobUrl,
+        uploadedUrl,
+        fallbackUrl,
+      }));
 
     onSubmit({ text: event.currentTarget.message.value, files }, event);
   };
